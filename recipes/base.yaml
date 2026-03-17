@@ -1,0 +1,30 @@
+name: agnostikos-base
+version: "0.1.0"
+arch: x86_64
+description: "AgnosticOS minimal base image for developers"
+
+backends:
+  - name: pacman
+    enabled: true
+  - name: flatpak
+    enabled: false
+  - name: nix
+    enabled: false
+
+packages:
+  - base
+  - linux
+  - linux-firmware
+  - go
+  - git
+  - neovim
+  - gcc
+  - make
+  - cmake
+  - wget
+  - curl
+
+build:
+  kernel_version: "6.8.0"
+  output_iso: "build/agnostikos-0.1.0-x86_64.iso"
+  uefi: true
