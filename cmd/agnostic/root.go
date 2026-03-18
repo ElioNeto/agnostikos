@@ -38,4 +38,13 @@ func Execute() {
 
 func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
+	rootCmd.VersionTemplate(`agnostic version {{.Version}} (commit: {{.GitCommit}})
+`)
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "version",
+		Short: "Show the version of this tool",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println(rootCmd.Long)
+		},
+	})
 }

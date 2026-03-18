@@ -12,10 +12,6 @@ build: ## Build the CLI binary
 	@mkdir -p $(BUILD_DIR)
 	$(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) .
 
-install: build ## Install binary to /usr/local/bin
-	@sudo cp $(BUILD_DIR)/$(BINARY_NAME) /usr/local/bin/
-	@sudo chmod +x /usr/local/bin/$(BINARY_NAME)
-
 test: ## Run unit tests
 	$(GO) test -v -race -coverprofile=coverage.out ./...
 
@@ -37,5 +33,9 @@ deps: ## Download Go dependencies
 
 dev: ## Run in development mode
 	@$(GO) run . --help
+
+install: build ## Install binary to /usr/local/bin
+	@sudo cp $(BUILD_DIR)/$(BINARY_NAME) /usr/local/bin/
+	@sudo chmod +x /usr/local/bin/$(BINARY_NAME)
 
 .DEFAULT_GOAL := help

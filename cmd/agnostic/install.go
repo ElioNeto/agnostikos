@@ -2,8 +2,6 @@ package agnostic
 
 import (
 	"fmt"
-
-	"github.com/ElioNeto/agnostikos/internal/manager"
 	"github.com/spf13/cobra"
 )
 
