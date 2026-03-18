@@ -1,103 +1,122 @@
 package agnostic
 
 import (
-	"fmt"
+	"bytes"
+	"testing"
 
-	"github.com/ElioNeto/agnostikos/internal/manager"
-	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
 )
 
-var (
-	backend  string
-	isolated bool
-)
+func TestInstallCmd(t *testing.T) {
+	t.Run("install package via pacman", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		cmd.SetOut(output)
+		backend = "pacman"
+		installCmd.Execute()
+		assert.Contains(t, output.String(), "📦 Installing 'test-package' via pacman...")
+	})
 
-var installCmd = &cobra.Command{
-	Use:   "install [package]",
-	Short: "Install a package via the specified backend",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		mgr := manager.NewAgnosticManager()
-		svc, ok := mgr.Backends[backend]
-		if !ok {
-			return fmt.Errorf("backend '%s' not found — available: pacman, nix, flatpak", backend)
-		}
-		fmt.Printf("📦 Installing '%s' via %s...\n", args[0], backend)
-		if isolated {
-			fmt.Println("🔒 Running in isolated namespace...")
-		}
-		if err := svc.Install(args[0]); err != nil {
-			return fmt.Errorf("installation failed: %w", err)
-		}
-		fmt.Printf("✅ '%s' installed successfully\n", args[0])
-		return nil
-	},
+	t.Run("install package via nix", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		cmd.SetOut(output)
+		backend = "nix"
+		installCmd.Execute()
+		assert.Contains(t, output.String(), "📦 Installing 'test-package' via nix...")
+	})
+
+	t.Run("install package via flatpak", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		cmd.SetOut(output)
+		backend = "flatpak"
+		installCmd.Execute()
+		assert.Contains(t, output.String(), "📦 Installing 'test-package' via flatpak...")
+	})
+
+	t.Run("install package in isolated namespace", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		cmd.SetOut(output)
+		backend = "pacman"
+		isolated = true
+		installCmd.Execute()
+		assert.Contains(t, output.String(), "📦 Installing 'test-package' via pacman...")
+		assert.Contains(t, output.String(), "🔒 Running in isolated namespace...")
+	})
 }
 
-var removeCmd = &cobra.Command{
-	Use:     "remove [package]",
-	Aliases: []string{"rm", "uninstall"},
-	Short:   "Remove a package via the specified backend",
-	Args:    cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		mgr := manager.NewAgnosticManager()
-		svc, ok := mgr.Backends[backend]
-		if !ok {
-			return fmt.Errorf("backend '%s' not found", backend)
-		}
-		fmt.Printf("🗑️  Removing '%s' via %s...\n", args[0], backend)
-		if err := svc.Remove(args[0]); err != nil {
-			return fmt.Errorf("removal failed: %w", err)
-		}
-		fmt.Printf("✅ '%s' removed\n", args[0])
-		return nil
-	},
+func TestRemoveCmd(t *testing.T) {
+	t.Run("remove package via pacman", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		cmd.SetOut(output)
+		backend = "pacman"
+		removeCmd.Execute()
+		assert.Contains(t, output.String(), "🗑️  Removing 'test-package' via pacman...")
+	})
+
+	t.Run("remove package via nix", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		cmd.SetOut(output)
+		backend = "nix"
+		removeCmd.Execute()
+		assert.Contains(t, output.String(), "🗑️  Removing 'test-package' via nix...")
+	})
+
+	t.Run("remove package via flatpak", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		cmd.SetOut(output)
+		backend = "flatpak"
+		removeCmd.Execute()
+		assert.Contains(t, output.String(), "🗑️  Removing 'test-package' via flatpak...")
+	})
 }
 
-var updateCmd = &cobra.Command{
-	Use:   "update",
-	Short: "Update all packages in the specified backend",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		mgr := manager.NewAgnosticManager()
-		svc, ok := mgr.Backends[backend]
-		if !ok {
-			return fmt.Errorf("backend '%s' not found", backend)
-		}
-		fmt.Printf("🔄 Updating via %s...\n", backend)
-		if err := svc.Update(); err != nil {
-			return fmt.Errorf("update failed: %w", err)
-		}
-		fmt.Println("✅ Update complete")
-		return nil
-	},
+func TestUpdateCmd(t *testing.T) {
+	t.Run("update packages via pacman", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		cmd.SetOut(output)
+		backend = "pacman"
+		updateCmd.Execute()
+		assert.Contains(t, output.String(), "🔄 Updating via pacman...")
+	})
+
+	t.Run("update packages via nix", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		cmd.SetOut(output)
+		backend = "nix"
+		updateCmd.Execute()
+		assert.Contains(t, output.String(), "🔄 Updating via nix...")
+	})
+
+	t.Run("update packages via flatpak", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		cmd.SetOut(output)
+		backend = "flatpak"
+		updateCmd.Execute()
+		assert.Contains(t, output.String(), "🔄 Updating via flatpak...")
+	})
 }
 
-var searchCmd = &cobra.Command{
-	Use:   "search [query]",
-	Short: "Search for packages in the specified backend",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		mgr := manager.NewAgnosticManager()
-		svc, ok := mgr.Backends[backend]
-		if !ok {
-			return fmt.Errorf("backend '%s' not found", backend)
-		}
-		fmt.Printf("🔍 Searching '%s' in %s...\n", args[0], backend)
-		results, err := svc.Search(args[0])
-		if err != nil {
-			return fmt.Errorf("search failed: %w", err)
-		}
-		for _, r := range results {
-			fmt.Println(r)
-		}
-		return nil
-	},
-}
+func TestSearchCmd(t *testing.T) {
+	t.Run("search package via pacman", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		cmd.SetOut(output)
+		backend = "pacman"
+		searchCmd.Execute()
+		assert.Contains(t, output.String(), "🔍 Searching 'test-query' in pacman...")
+	})
 
-func init() {
-	for _, cmd := range []*cobra.Command{installCmd, removeCmd, updateCmd, searchCmd} {
-		cmd.Flags().StringVarP(&backend, "backend", "b", "pacman", "Backend to use (pacman, nix, flatpak)")
-	}
-	installCmd.Flags().BoolVarP(&isolated, "isolated", "i", false, "Run in isolated Linux namespace")
-	rootCmd.AddCommand(installCmd, removeCmd, updateCmd, searchCmd)
+	t.Run("search package via nix", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		cmd.SetOut(output)
+		backend = "nix"
+		searchCmd.Execute()
+		assert.Contains(t, output.String(), "🔍 Searching 'test-query' in nix...")
+	})
+
+	t.Run("search package via flatpak", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		cmd.SetOut(output)
+		backend = "flatpak"
+		searchCmd.Execute()
+		assert.Contains(t, output.String(), "🔍 Searching 'test-query' in flatpak...")
+	})
 }
