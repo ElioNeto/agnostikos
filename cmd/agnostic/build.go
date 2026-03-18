@@ -16,10 +16,10 @@ type Recipe struct {
 	Description string   `yaml:"description"`
 	Packages    []string `yaml:"packages"`
 	Build       struct {
-		KernelVersion string `yaml:"kernel_version"`
-		OutputISO     string `yaml:"output_iso"`
-		UEFI          bool   `yaml:"uefi"`
-	} `yaml:"build"`
+			KernelVersion string `yaml:"kernel_version"`
+			OutputISO     string `yaml:"output_iso"`
+			UEFI          bool   `yaml:"uefi"`
+		} `yaml:"build"`
 }
 
 var (

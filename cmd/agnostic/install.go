@@ -2,6 +2,7 @@ package agnostic
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/ElioNeto/agnostikos/internal/manager"
 	"github.com/spf13/cobra"
@@ -100,4 +101,11 @@ func init() {
 	}
 	installCmd.Flags().BoolVarP(&isolated, "isolated", "i", false, "Run in isolated Linux namespace")
 	rootCmd.AddCommand(installCmd, removeCmd, updateCmd, searchCmd)
+}
+
+func Execute() {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }
