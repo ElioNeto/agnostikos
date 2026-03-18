@@ -29,6 +29,16 @@ Examples:
 	Version: fmt.Sprintf("%s (commit: %s)", Version, Commit),
 }
 
+var isolatedCmd = &cobra.Command{
+	Use:   "isolated",
+	Short: "Install a package in an isolated environment",
+	Long: `Install a package in an isolated environment using a specified backend.
+
+Usage:
+  agnostic install <package-name> --backend <backend>
+  agnostic install <package-name> --isolated`,
+}
+
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -37,5 +47,11 @@ func Execute() {
 }
 
 func init() {
+	rootCmd.AddCommand(isolatedCmd)
+
+	isolatedCmd.Flags().StringP("backend", "b", "", "Specify the package manager backend (pacman, nix, flatpak)")
+	isolatedCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		fmt.Fprintf(cmd.OutOrStdout(), "%s\n%s\n", rootCmd.Long, isolatedCmd.Long)
+	})
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 }

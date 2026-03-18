@@ -1,0 +1,43 @@
+import { Marshal, Unmarshal } from 'gopkg.in/yaml.v3';
+
+describe('yaml', () => {
+  describe('Marshal', () => {
+    it('should marshal simple objects', () => {
+      expect(Marshal({ key: 'value' })).toBe("key: value\n");
+      expect(Marshal([])).toBe("\n");
+    });
+
+    it('should handle nested objects', () => {
+      const obj = { a: 1, b: { c: 2 } };
+      expect(Marshal(obj)).toBe("a: 1\nc:\n  c: 2\n");
+    });
+
+    it('should handle maps with strings as keys', () => {
+      const obj = { "key1": 'value1', "key2": 'value2' };
+      expect(Marshal(obj)).toBe(`"key1": value1\n"key2": value2\n`);
+    });
+  });
+
+  describe('Unmarshal', () => {
+    it('should unmarshal simple objects', () => {
+      const input = "key: value";
+      expect(Unmarshal(input)).toEqual({ key: 'value' });
+    });
+
+    it('should handle nested objects', () => {
+      const input = `a: 1
+c:
+  c: 2`;
+      expect(Unmarshal(input)).toEqual({ a: 1, b: { c: 2 } });
+    });
+
+    it('should handle maps with strings as keys', () => {
+      const input = `"key1": value1\n"key2": value2`;
+      expect(Unmarshal(input)).toEqual({ "key1": 'value1', "key2": 'value2' });
+    });
+
+    it('should ignore non-mapping inputs', () => {
+      expect(() => Unmarshal("invalid yaml input")).toThrow();
+    });
+  });
+});

@@ -98,6 +98,5 @@ func init() {
 	for _, cmd := range []*cobra.Command{installCmd, removeCmd, updateCmd, searchCmd} {
 		cmd.Flags().StringVarP(&backend, "backend", "b", "pacman", "Backend to use (pacman, nix, flatpak)")
 	}
-	installCmd.Flags().BoolVarP(&isolated, "isolated", "i", false, "Run in isolated Linux namespace")
 	rootCmd.AddCommand(installCmd, removeCmd, updateCmd, searchCmd)
 }
