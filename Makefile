@@ -1,4 +1,4 @@
-.PHONY: help build test clean install test-iso lint fmt deps
+.PHONY: help build test clean install test-iso test-iso-headless lint fmt deps
 
 BINARY_NAME=agnostic
 BUILD_DIR=build
@@ -21,6 +21,9 @@ test: ## Run unit tests
 
 test-iso: ## Test ISO in QEMU
 	@bash scripts/run-qemu.sh $(BUILD_DIR)/agnostikos-latest.iso
+
+test-iso-headless: ## Test ISO in QEMU (headless mode, for CI)
+	HEADLESS=1 bash scripts/run-qemu.sh $(BUILD_DIR)/agnostikos-latest.iso
 
 lint: ## Run golangci-lint
 	golangci-lint run ./...

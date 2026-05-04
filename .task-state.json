@@ -5,31 +5,31 @@
     {
       "id": "todo-1",
       "description": "Fix broken NC variable reference in run-qemu.sh: replace ${NC} with ${NO_COLOR} on line 14",
-      "status": "pending",
+      "status": "completed",
       "files": ["scripts/run-qemu.sh"]
     },
     {
       "id": "todo-2",
       "description": "Add test-iso-headless target to Makefile that sets HEADLESS=1 for CI headless QEMU execution",
-      "status": "pending",
+      "status": "completed",
       "files": ["Makefile"]
     },
     {
       "id": "todo-3",
       "description": "Create .golangci.yml configuration file for golangci-lint (Go 1.24+, timeout 5m, standard linters)",
-      "status": "pending",
+      "status": "completed",
       "files": [".golangci.yml"]
     },
     {
       "id": "todo-4",
       "description": "Add QEMU test-iso job in .github/workflows/build.yml that installs qemu-system-x86_64 + ovmf and runs make test-iso-headless",
-      "status": "pending",
+      "status": "completed",
       "files": [".github/workflows/build.yml"]
     },
     {
       "id": "todo-5",
       "description": "Document host dependencies (qemu-system-x86_64, ovmf) for QEMU/KVM testing in a docs/requirements.md file",
-      "status": "pending",
+      "status": "completed",
       "files": ["docs/requirements.md"]
     }
   ]

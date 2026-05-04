@@ -29,3 +29,6 @@ Thumbs.db
 # Temporary
 *.tmp
 *.log
+
+# Node / Scripts
+scripts/node_modules/
