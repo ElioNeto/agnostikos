@@ -18,7 +18,7 @@ func TestInstallCmd_ValidBackend(t *testing.T) {
 	rootCmd.SetOut(buf)
 	rootCmd.SetArgs([]string{"install", "firefox", "--backend", "pacman"})
 	// Este teste vai falhar se pacman não estiver instalado — tudo bem por ora
-	rootCmd.Execute()
+	_ = rootCmd.Execute()
 }
 
 func TestRemoveCmd_InvalidBackend(t *testing.T) {

@@ -155,7 +155,7 @@ func mountVirtualFS(target string) error {
 // UnmountVirtualFS desmonta os filesystems virtuais do chroot
 func UnmountVirtualFS(target string) error {
 	for _, p := range []string{"dev/pts", "dev", "run", "proc", "sys"} {
-		exec.Command("umount", filepath.Join(target, p)).Run()
+		_ = exec.Command("umount", filepath.Join(target, p)).Run()
 	}
 	return nil
 }

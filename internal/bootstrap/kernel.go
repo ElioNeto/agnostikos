@@ -24,8 +24,12 @@ func BuildKernel(cfg KernelConfig) error {
 	srcPath := filepath.Join(cfg.SourcesDir, "linux-"+cfg.Version)
 	tarballPath := filepath.Join(cfg.SourcesDir, tarball)
 
-	os.MkdirAll(cfg.SourcesDir, 0755)
-	os.MkdirAll(cfg.OutputDir, 0755)
+	if err := os.MkdirAll(cfg.SourcesDir, 0755); err != nil {
+		return fmt.Errorf("mkdir sourcesDir: %w", err)
+	}
+	if err := os.MkdirAll(cfg.OutputDir, 0755); err != nil {
+		return fmt.Errorf("mkdir outputDir: %w", err)
+	}
 
 	// 1. Download
 	if _, err := os.Stat(tarballPath); os.IsNotExist(err) {
@@ -48,8 +52,8 @@ func BuildKernel(cfg KernelConfig) error {
 		}
 	}
 
-	// 3. mrproper
-	exec.Command("make", "-C", srcPath, "mrproper").Run()
+	// 3. mrproper (best-effort: ignora erro)
+	_ = exec.Command("make", "-C", srcPath, "mrproper").Run()
 
 	// 4. defconfig
 	fmt.Printf("[kernel] Applying %s...\n", cfg.Defconfig)
@@ -79,11 +83,11 @@ func BuildKernel(cfg KernelConfig) error {
 		return fmt.Errorf("write vmlinuz: %w", err)
 	}
 
-	// 7. Install modules
+	// 7. Install modules (best-effort: ignora erro)
 	modPath := filepath.Dir(cfg.OutputDir)
 	cmd = exec.Command("make", "-C", srcPath, "INSTALL_MOD_PATH="+modPath, "modules_install")
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	cmd.Run()
+	_ = cmd.Run()
 
 	fmt.Printf("[kernel] ✅ Kernel ready: %s\n", dst)
 	return nil
