@@ -159,22 +159,3 @@ func UnmountVirtualFS(target string) error {
 	}
 	return nil
 }
-
-func DownloadToolchain(sourcesDir string) error {
-	packages := []struct{ name, url string }{
-		{"binutils-2.42", "https://sourceware.org/pub/binutils/releases/binutils-2.42.tar.xz"},
-		{"gcc-14.1.0", "https://ftp.gnu.org/gnu/gcc/gcc-14.1.0/gcc-14.1.0.tar.xz"},
-		{"glibc-2.39", "https://ftp.gnu.org/gnu/glibc/glibc-2.39.tar.xz"},
-	}
-	for _, pkg := range packages {
-		dest := filepath.Join(sourcesDir, filepath.Base(pkg.url))
-		if _, err := os.Stat(dest); err == nil {
-			fmt.Printf("[toolchain] already exists: %s\n", pkg.name)
-			continue
-		}
-		if err := downloadFile(dest, pkg.url); err != nil {
-			return fmt.Errorf("download %s: %w", pkg.name, err)
-		}
-	}
-	return nil
-}
