@@ -1,0 +1,15 @@
+version: 2
+
+builds:
+  - binary: agnostic
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+
+checksum:
+  name_template: 'checksums.txt'
