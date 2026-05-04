@@ -2,9 +2,12 @@ package agnostic
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/ElioNeto/agnostikos/internal/manager"
 	"github.com/spf13/cobra"
+
+	"github.com/ElioNeto/agnostikos/internal/isolation"
 )
 
 var (
@@ -25,6 +28,11 @@ var installCmd = &cobra.Command{
 		fmt.Printf("📦 Installing '%s' via %s...\n", args[0], backend)
 		if isolated {
 			fmt.Println("🔒 Running in isolated namespace...")
+			binArgs, err := backendInstallArgs(backend, args[0])
+			if err != nil {
+				return err
+			}
+			return isolation.RunIsolated(binArgs[0], binArgs[1:]...)
 		}
 		if err := svc.Install(args[0]); err != nil {
 			return fmt.Errorf("installation failed: %w", err)
@@ -100,4 +108,20 @@ func init() {
 	}
 	installCmd.Flags().BoolVarP(&isolated, "isolated", "i", false, "Run in isolated Linux namespace")
 	rootCmd.AddCommand(installCmd, removeCmd, updateCmd, searchCmd)
+}
+
+func backendInstallArgs(backend, pkg string) ([]string, error) {
+	switch backend {
+	case "pacman":
+		return []string{"pacman", "-S", "--noconfirm", pkg}, nil
+	case "nix":
+		if !strings.Contains(pkg, "#") {
+			pkg = "nixpkgs#" + pkg
+		}
+		return []string{"nix", "profile", "install", pkg}, nil
+	case "flatpak":
+		return []string{"flatpak", "install", "--noninteractive", "-y", pkg}, nil
+	default:
+		return nil, fmt.Errorf("backend '%s' not supported for isolated mode", backend)
+	}
 }
