@@ -3,6 +3,7 @@
 BINARY_NAME=agnostic
 BUILD_DIR=build
 GO=go
+LFS ?= /mnt/lfs
 LDFLAGS=-ldflags "-X github.com/ElioNeto/agnostikos/cmd/agnostic.Version=$(shell git describe --tags --always --dirty 2>/dev/null || echo dev) -X github.com/ElioNeto/agnostikos/cmd/agnostic.Commit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
 help: ## Show this help
