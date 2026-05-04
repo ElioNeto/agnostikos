@@ -1,36 +1,36 @@
 {
-  "issue_number": 4,
-  "title": "[VIRT] QEMU Integration: Teste da ISO com aceleração KVM",
+  "issue_number": 12,
+  "title": "[CI] GitHub Actions: pipeline de lint, test e build multiplataforma",
   "todos": [
     {
       "id": "todo-1",
-      "description": "Fix broken NC variable reference in run-qemu.sh: replace ${NC} with ${NO_COLOR} on line 14",
-      "status": "completed",
-      "files": ["scripts/run-qemu.sh"]
-    },
-    {
-      "id": "todo-2",
-      "description": "Add test-iso-headless target to Makefile that sets HEADLESS=1 for CI headless QEMU execution",
-      "status": "completed",
-      "files": ["Makefile"]
-    },
-    {
-      "id": "todo-3",
-      "description": "Create .golangci.yml configuration file for golangci-lint (Go 1.24+, timeout 5m, standard linters)",
+      "description": "Add gocritic to the enabled linters list in .golangci.yml (missing from issue #4 implementation)",
       "status": "completed",
       "files": [".golangci.yml"]
     },
     {
-      "id": "todo-4",
-      "description": "Add QEMU test-iso job in .github/workflows/build.yml that installs qemu-system-x86_64 + ovmf and runs make test-iso-headless",
+      "id": "todo-2",
+      "description": "Create .goreleaser.yml with linux/amd64 and linux/arm64 builds, archive, and checksums",
       "status": "completed",
-      "files": [".github/workflows/build.yml"]
+      "files": [".goreleaser.yml"]
+    },
+    {
+      "id": "todo-3",
+      "description": "Create .github/workflows/release.yml triggered by v* tags, using goreleaser-action to publish GitHub Release",
+      "status": "completed",
+      "files": [".github/workflows/release.yml"]
+    },
+    {
+      "id": "todo-4",
+      "description": "Add CI status badge to README.md linking to the build.yml workflow",
+      "status": "completed",
+      "files": ["README.md"]
     },
     {
       "id": "todo-5",
-      "description": "Document host dependencies (qemu-system-x86_64, ovmf) for QEMU/KVM testing in a docs/requirements.md file",
+      "description": "Document branch protection requirement for main branch requiring CI green (GitHub repo settings, not code)",
       "status": "completed",
-      "files": ["docs/requirements.md"]
+      "files": []
     }
   ]
 }
