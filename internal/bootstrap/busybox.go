@@ -63,6 +63,20 @@ func BuildBusybox(ctx context.Context, cfg BusyboxConfig) error {
 		return fmt.Errorf("busybox defconfig: %w", err)
 	}
 
+	// 3b. Patch .config: disable CONFIG_TC — BusyBox tc.c references CBQ kernel
+	// structs (TCA_CBQ_MAX, struct tc_cbq_lssopt, etc.) removed in Linux 6.1+.
+	dotConfig := filepath.Join(busyboxDir, ".config")
+	fmt.Println("[busybox] Patching .config: disabling CONFIG_TC (incompatible with kernel >= 6.1)...")
+	patchCmd := exec.CommandContext(ctx, "sed", "-i",
+		"-e", "s/^CONFIG_TC=y/CONFIG_TC=n/",
+		"-e", "s/^CONFIG_FEATURE_TC_INGRESS=y/CONFIG_FEATURE_TC_INGRESS=n/",
+		dotConfig,
+	)
+	patchCmd.Stdout, patchCmd.Stderr = os.Stdout, os.Stderr
+	if err := patchCmd.Run(); err != nil {
+		return fmt.Errorf("busybox patch .config: %w", err)
+	}
+
 	// 4. Compile
 	numCPUs := cfg.NumCPUs
 	if numCPUs == "" {

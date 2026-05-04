@@ -8,21 +8,29 @@ import (
 	"path/filepath"
 )
 
+// GRUBConfig contém os parâmetros de instalação do GRUB
+type GRUBConfig struct {
+	RootfsDir string // ex: "/mnt/data"
+	Device    string // ex: "/dev/sda" — obrigatório para BIOS (disco base, sem número de partição)
+	UEFI      bool   // true = x86_64-efi, false = i386-pc
+}
+
 // InstallGRUB configura o GRUB no RootFS (BIOS ou UEFI)
-func InstallGRUB(ctx context.Context, rootfsDir string, uefi bool) error {
-	if rootfsDir == "" {
+func InstallGRUB(ctx context.Context, cfg GRUBConfig) error {
+	if cfg.RootfsDir == "" {
 		return fmt.Errorf("rootfs directory is required")
 	}
+	if !cfg.UEFI && cfg.Device == "" {
+		return fmt.Errorf("device is required for BIOS grub-install (e.g. /dev/sda)")
+	}
 
-	bootDir := filepath.Join(rootfsDir, "boot")
+	bootDir := filepath.Join(cfg.RootfsDir, "boot")
 	grubDir := filepath.Join(bootDir, "grub")
 
-	// Criar diretório do GRUB
 	if err := os.MkdirAll(grubDir, 0755); err != nil {
 		return fmt.Errorf("mkdir grub dir: %w", err)
 	}
 
-	// Criar grub.cfg
 	grubCfg := `set timeout=5
 set default=0
 
@@ -37,37 +45,31 @@ menuentry "Agnostikos Linux" {
 	}
 	fmt.Printf("[grub] grub.cfg created at %s\n", grubCfgPath)
 
-	// Se UEFI, criar diretório EFI e placeholder BOOTx64.EFI
-	if uefi {
+	if cfg.UEFI {
 		efiDir := filepath.Join(bootDir, "efi", "EFI", "BOOT")
 		if err := os.MkdirAll(efiDir, 0755); err != nil {
 			return fmt.Errorf("mkdir efi dir: %w", err)
 		}
 
-		// Placeholder BOOTx64.EFI (script stub que indica a necessidade de grub-install real)
-		efiStub := `#!/bin/sh
-# Placeholder EFI stub - replace with real grub-install output
-# Run: grub-install --target=x86_64-efi --root-directory=` + rootfsDir + `
-echo "This is a placeholder EFI binary. Run grub-install to create the real one."
-`
+		efiStub := "#!/bin/sh\n# Placeholder EFI stub\n# Run: grub-install --target=x86_64-efi --root-directory=" + cfg.RootfsDir + "\n"
 		efiPath := filepath.Join(efiDir, "BOOTx64.EFI")
 		if err := os.WriteFile(efiPath, []byte(efiStub), 0755); err != nil {
 			return fmt.Errorf("write BOOTx64.EFI: %w", err)
 		}
 		fmt.Printf("[grub] UEFI directory structure created at %s\n", efiDir)
 
-		// Tentar grub-install se disponível (não fatal se falhar)
 		if hasGrubInstall() {
 			fmt.Println("[grub] grub-install found, attempting UEFI installation...")
 			grubInstCmd := exec.CommandContext(ctx, "grub-install",
 				"--target=x86_64-efi",
-				"--root-directory="+rootfsDir,
+				"--root-directory="+cfg.RootfsDir,
 				"--boot-directory="+bootDir,
+				"--efi-directory="+filepath.Join(bootDir, "efi"),
+				"--no-nvram",
 			)
 			grubInstCmd.Stdout, grubInstCmd.Stderr = os.Stdout, os.Stderr
 			if err := grubInstCmd.Run(); err != nil {
-				fmt.Printf("[grub] warn: grub-install (UEFI) failed: %v\n", err)
-				fmt.Println("[grub] grub.cfg and EFI structure created; grub-install requires root/device")
+				fmt.Printf("[grub] warn: grub-install UEFI failed: %v\n", err)
 			} else {
 				fmt.Println("[grub] grub-install (UEFI) completed")
 			}
@@ -75,21 +77,19 @@ echo "This is a placeholder EFI binary. Run grub-install to create the real one.
 			fmt.Println("[grub] grub-install not found; BOOTx64.EFI is a placeholder")
 		}
 	} else {
-		// BIOS mode: tentar grub-install se disponível (não fatal se falhar)
 		if hasGrubInstall() {
-			fmt.Println("[grub] grub-install found, attempting BIOS installation...")
+			fmt.Printf("[grub] grub-install found, attempting BIOS installation on %s...\n", cfg.Device)
 			grubInstCmd := exec.CommandContext(ctx, "grub-install",
 				"--target=i386-pc",
-				"--root-directory="+rootfsDir,
+				"--root-directory="+cfg.RootfsDir,
 				"--boot-directory="+bootDir,
+				cfg.Device,
 			)
 			grubInstCmd.Stdout, grubInstCmd.Stderr = os.Stdout, os.Stderr
 			if err := grubInstCmd.Run(); err != nil {
-				fmt.Printf("[grub] warn: grub-install (BIOS) failed: %v\n", err)
-				fmt.Println("[grub] grub.cfg created; grub-install requires root/device")
-			} else {
-				fmt.Println("[grub] grub-install (BIOS) completed")
+				return fmt.Errorf("grub-install BIOS on %s: %w", cfg.Device, err)
 			}
+			fmt.Printf("[grub] grub-install (BIOS) completed on %s\n", cfg.Device)
 		} else {
 			fmt.Println("[grub] grub-install not found; grub.cfg created without bootloader installation")
 		}
