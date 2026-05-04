@@ -1,19 +1,70 @@
 package manager
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+	"os/exec"
+	"strings"
+	"time"
+)
 
-// FlatpakBackend implementa PackageService usando flatpak (stub)
+// FlatpakBackend implementa PackageService usando flatpak
 type FlatpakBackend struct{}
 
 func (f *FlatpakBackend) Install(pkgName string) error {
-	return fmt.Errorf("flatpak backend: not yet implemented")
+	if strings.TrimSpace(pkgName) == "" {
+		return fmt.Errorf("package name cannot be empty")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "flatpak", "install", "--noninteractive", "-y", pkgName).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("flatpak install: %s — %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
+
 func (f *FlatpakBackend) Remove(pkgName string) error {
-	return fmt.Errorf("flatpak backend: not yet implemented")
+	if strings.TrimSpace(pkgName) == "" {
+		return fmt.Errorf("package name cannot be empty")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "flatpak", "uninstall", "--noninteractive", "-y", pkgName).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("flatpak remove: %s — %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
+
 func (f *FlatpakBackend) Update() error {
-	return fmt.Errorf("flatpak backend: not yet implemented")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "flatpak", "update", "--noninteractive", "-y").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("flatpak update: %s — %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
+
 func (f *FlatpakBackend) Search(query string) ([]string, error) {
-	return nil, fmt.Errorf("flatpak backend: not yet implemented")
+	if strings.TrimSpace(query) == "" {
+		return nil, fmt.Errorf("search query cannot be empty")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "flatpak", "search", "--columns=application,name,description", query).CombinedOutput()
+	if err != nil && len(out) == 0 {
+		return nil, fmt.Errorf("flatpak search: %s", err)
+	}
+	var results []string
+	for i, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		// pula o cabeçalho (primeira linha) e linhas vazias
+		if i == 0 || line == "" {
+			continue
+		}
+		results = append(results, line)
+	}
+	return results, nil
 }
