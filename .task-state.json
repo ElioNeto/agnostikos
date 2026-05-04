@@ -1,36 +1,28 @@
 {
-  "issue_number": 12,
-  "title": "[CI] GitHub Actions: pipeline de lint, test e build multiplataforma",
+  "issue_number": 15,
+  "title": "[DOCS] README e documentação inicial do projeto",
+  "status": "complete",
   "todos": [
     {
       "id": "todo-1",
-      "description": "Add gocritic to the enabled linters list in .golangci.yml (missing from issue #4 implementation)",
-      "status": "completed",
-      "files": [".golangci.yml"]
-    },
-    {
-      "id": "todo-2",
-      "description": "Create .goreleaser.yml with linux/amd64 and linux/arm64 builds, archive, and checksums",
-      "status": "completed",
-      "files": [".goreleaser.yml"]
-    },
-    {
-      "id": "todo-3",
-      "description": "Create .github/workflows/release.yml triggered by v* tags, using goreleaser-action to publish GitHub Release",
-      "status": "completed",
-      "files": [".github/workflows/release.yml"]
-    },
-    {
-      "id": "todo-4",
-      "description": "Add CI status badge to README.md linking to the build.yml workflow",
-      "status": "completed",
+      "title": "Update README.md with project description, prerequisites table, quick start, backends comparison table, example config, and streamlined roadmap",
+      "required": true,
+      "status": "done",
       "files": ["README.md"]
     },
     {
-      "id": "todo-5",
-      "description": "Document branch protection requirement for main branch requiring CI green (GitHub repo settings, not code)",
-      "status": "completed",
-      "files": []
+      "id": "todo-2",
+      "title": "Create CONTRIBUTING.md with dev environment setup, Conventional Commits rules, test/lint workflows, and PR checklist",
+      "required": true,
+      "status": "done",
+      "files": ["CONTRIBUTING.md"]
+    },
+    {
+      "id": "todo-3",
+      "title": "Create docs/architecture.md with ASCII module diagram (internal/* packages), end-to-end build flow (config→rootfs→iso→qemu), and key design decisions (Go, no SQLite, etc.)",
+      "required": true,
+      "status": "done",
+      "files": ["docs/architecture.md"]
     }
   ]
 }
