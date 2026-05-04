@@ -1,0 +1,81 @@
+{
+  "version": "1",
+  "issues": [
+    {
+      "number": 15,
+      "priority": "low",
+      "title": "[DOCS] README e documentação inicial do projeto",
+      "status": "open",
+      "depends_on": [],
+      "blocks": [],
+      "acceptance_summary": [
+        "README.md com instruções claras de instalação e uso",
+        "CONTRIBUTING.md presente",
+        "docs/architecture.md com diagrama de módulos",
+        "Sem referências a arquitetura legada ou placeholders"
+      ],
+      "fetched_body": false
+    },
+    {
+      "number": 14,
+      "priority": "low",
+      "title": "[CONFIG] Sistema de configuração: perfis de instalação e agnostic.yaml",
+      "status": "open",
+      "depends_on": [3],
+      "blocks": [],
+      "acceptance_summary": [
+        "agnostic install --config agnostic.yaml instala todos os pacotes definidos",
+        "Configuração inválida retorna erro descritivo (sem panic)",
+        "agnostic.yaml.example presente e documentado",
+        "Lint e testes do módulo passam"
+      ],
+      "fetched_body": false
+    },
+    {
+      "number": 13,
+      "priority": "low",
+      "title": "[ISO] ISO Builder: geração de ISO bootável com mkisofs/xorriso",
+      "status": "open",
+      "depends_on": [2],
+      "blocks": [4],
+      "acceptance_summary": [
+        "make iso gera agnostikos.iso sem erros",
+        "ISO é bootável em BIOS e UEFI (validado pelo #4)",
+        "Checksum SHA256 gerado automaticamente",
+        "Testes unitários com mock de executor passam",
+        "Lint e testes do módulo passam"
+      ],
+      "fetched_body": false
+    },
+    {
+      "number": 12,
+      "priority": "low",
+      "title": "[CI] GitHub Actions: pipeline de lint, test e build multiplataforma",
+      "status": "open",
+      "depends_on": [1],
+      "blocks": [4],
+      "acceptance_summary": [
+        "go test -race ./... passa sem data races",
+        "golangci-lint passa sem erros (incluindo errcheck)",
+        "Build verificado em ubuntu-latest",
+        "Release automático via tag v*"
+      ],
+      "fetched_body": false
+    },
+    {
+      "number": 4,
+      "priority": "low",
+      "title": "[VIRT] QEMU Integration: Teste da ISO com aceleração KVM",
+      "status": "open",
+      "depends_on": [],
+      "blocks": [],
+      "acceptance_summary": [
+        "make test-iso inicia a VM e faz boot com sucesso",
+        "Boot UEFI detectado automaticamente via OVMF",
+        "CI passa no GitHub Actions",
+        "Timeout de 120s para evitar builds travados"
+      ],
+      "fetched_body": false
+    }
+  ]
+}

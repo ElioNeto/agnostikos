@@ -11,8 +11,8 @@ CPUS="${CPUS:-2}"
 HEADLESS="${HEADLESS:-0}"
 BOOT_TIMEOUT="${BOOT_TIMEOUT:-120}"
 
-echo -e "${GREEN}[QEMU]${NC} Starting AgnosticOS test..."
-echo -e "${GREEN}[QEMU]${NC} ISO: $ISO | RAM: $RAM | CPUs: $CPUS | Headless: $HEADLESS | Timeout: ${BOOT_TIMEOUT}s"
+echo -e "${GREEN}[QEMU]${NO_COLOR} Starting AgnosticOS test..."
+echo -e "${GREEN}[QEMU]${NO_COLOR} ISO: $ISO | RAM: $RAM | CPUs: $CPUS | Headless: $HEADLESS | Timeout: ${BOOT_TIMEOUT}s"
 
 [[ ! -f "$ISO" ]] && { echo -e "${RED}[ERROR]${NO_COLOR} ISO not found: $ISO"; exit 1; }
 
