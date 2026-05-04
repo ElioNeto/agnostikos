@@ -5,11 +5,18 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NO_COLOR='\033[0m'
 
+# QEMU availability check
+if ! command -v qemu-system-x86_64 &>/dev/null; then
+    echo -e "${RED}[ERROR]${NO_COLOR} qemu-system-x86_64 not found. Install with: apt install qemu-system-x86"
+    exit 1
+fi
+
 ISO="${1:-build/agnostikos-latest.iso}"
 RAM="${RAM:-2G}"
 CPUS="${CPUS:-2}"
 HEADLESS="${HEADLESS:-0}"
 BOOT_TIMEOUT="${BOOT_TIMEOUT:-120}"
+SERIAL_LOG="/tmp/qemu-serial-$$.log"
 
 echo -e "${GREEN}[QEMU]${NO_COLOR} Starting AgnosticOS test..."
 echo -e "${GREEN}[QEMU]${NO_COLOR} ISO: $ISO | RAM: $RAM | CPUs: $CPUS | Headless: $HEADLESS | Timeout: ${BOOT_TIMEOUT}s"
@@ -18,7 +25,13 @@ echo -e "${GREEN}[QEMU]${NO_COLOR} ISO: $ISO | RAM: $RAM | CPUs: $CPUS | Headles
 
 # KVM detection
 KVM_FLAG=""
-[[ -e /dev/kvm ]] && KVM_FLAG="-enable-kvm" && echo -e "${GREEN}[QEMU]${NO_COLOR} KVM enabled"
+if [[ -e /dev/kvm ]]; then
+    KVM_FLAG="-enable-kvm"
+    echo -e "${GREEN}[QEMU]${NO_COLOR} KVM acceleration enabled"
+else
+    KVM_FLAG=""
+    echo -e "${GREEN}[INFO]${NO_COLOR} KVM not available — using TCG emulation (slower)"
+fi
 
 # OVMF detection
 OVMF_FLAG=""
@@ -28,11 +41,17 @@ done
 
 # Display mode: headless for CI, graphical otherwise
 if [[ "$HEADLESS" == "1" ]]; then
-  DISPLAY_FLAGS="-display none -serial stdio"
-  echo -e "${GREEN}[QEMU]${NO_COLOR} Running headless (CI mode)"
+  DISPLAY_FLAGS="-display none -serial file:${SERIAL_LOG}"
+  echo -e "${GREEN}[QEMU]${NO_COLOR} Running headless (CI mode) - serial log: $SERIAL_LOG"
 else
   DISPLAY_FLAGS="-vga virtio -serial mon:stdio"
 fi
+
+# Ensure serial log is removed on exit
+cleanup() {
+  [[ "$HEADLESS" == "1" ]] && rm -f "$SERIAL_LOG"
+}
+trap cleanup EXIT
 
 # Run with timeout to avoid hanging CI
 timeout "${BOOT_TIMEOUT}" qemu-system-x86_64 \
@@ -55,3 +74,27 @@ timeout "${BOOT_TIMEOUT}" qemu-system-x86_64 \
   }
 
 echo -e "${GREEN}[QEMU]${NO_COLOR} Done"
+
+# Boot output validation (headless mode only)
+if [[ "$HEADLESS" == "1" ]]; then
+  echo ""
+  echo -e "${GREEN}[BOOT TEST]${NO_COLOR} Analyzing serial output..."
+
+  if [[ ! -f "$SERIAL_LOG" ]]; then
+    echo -e "${RED}[BOOT TEST]${NO_COLOR} Serial log not found: $SERIAL_LOG"
+    echo -e "${RED}[BOOT TEST]${NO_COLOR} FAIL"
+    exit 1
+  fi
+
+  # Grep for the welcome message from the initramfs /init script
+  if grep -q "Welcome to Agnostikos" "$SERIAL_LOG"; then
+    echo -e "${GREEN}[BOOT TEST]${NO_COLOR} Welcome message found in serial output"
+    echo -e "${GREEN}[BOOT TEST]${NO_COLOR} PASS"
+  else
+    echo -e "${RED}[BOOT TEST]${NO_COLOR} Welcome message NOT found in serial output"
+    echo -e "${RED}[BOOT TEST]${NO_COLOR} Last 50 lines of serial output:"
+    tail -50 "$SERIAL_LOG"
+    echo -e "${RED}[BOOT TEST]${NO_COLOR} FAIL"
+    exit 1
+  fi
+fi

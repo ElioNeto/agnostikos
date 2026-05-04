@@ -23,7 +23,10 @@ func GenerateISO(cfg ISOConfig) error {
 		return fmt.Errorf("RootFS and Output are required")
 	}
 
-	workDir, _ := os.MkdirTemp("", "agnostikos-iso-*")
+	workDir, err := os.MkdirTemp("", "agnostikos-iso-*")
+	if err != nil {
+		return fmt.Errorf("create work dir: %w", err)
+	}
 	defer os.RemoveAll(workDir)
 
 	isoDir := filepath.Join(workDir, "iso")
@@ -42,9 +45,18 @@ func GenerateISO(cfg ISOConfig) error {
 		return fmt.Errorf("write vmlinuz: %w", err)
 	}
 
-	// Create initramfs stub
-	if err := createinitramfs(filepath.Join(bootDir, "initramfs.img")); err != nil {
-		return fmt.Errorf("create initramfs: %w", err)
+	// Copy real initramfs from rootfs build, or create stub if missing
+	initramfsSrc := filepath.Join(cfg.RootFS, "boot", "initramfs.img")
+	if data, err := os.ReadFile(initramfsSrc); err == nil {
+		fmt.Printf("[iso] using real initramfs from %s (%d bytes)\n", initramfsSrc, len(data))
+		if err := os.WriteFile(filepath.Join(bootDir, "initramfs.img"), data, 0644); err != nil {
+			return fmt.Errorf("write initramfs: %w", err)
+		}
+	} else {
+		fmt.Printf("[iso] real initramfs not found at %s, creating stub\n", initramfsSrc)
+		if err := createinitramfs(filepath.Join(bootDir, "initramfs.img")); err != nil {
+			return fmt.Errorf("create initramfs stub: %w", err)
+		}
 	}
 
 	// Bootloader setup
@@ -63,7 +75,10 @@ func GenerateISO(cfg ISOConfig) error {
 }
 
 func createinitramfs(output string) error {
-	initDir, _ := os.MkdirTemp("", "initramfs-*")
+	initDir, err := os.MkdirTemp("", "initramfs-*")
+	if err != nil {
+		return fmt.Errorf("create initramfs temp dir: %w", err)
+	}
 	defer os.RemoveAll(initDir)
 	for _, d := range []string{"bin", "dev", "etc", "proc", "sys", "mnt/root"} {
 		if err := os.MkdirAll(filepath.Join(initDir, d), 0755); err != nil {

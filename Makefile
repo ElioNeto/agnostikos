@@ -1,4 +1,4 @@
-.PHONY: help build test clean install test-iso test-iso-headless lint fmt deps iso
+.PHONY: help build test clean install test-iso test-iso-headless lint fmt deps iso bootstrap
 
 BINARY_NAME=agnostic
 BUILD_DIR=build
@@ -23,8 +23,11 @@ test: ## Run unit tests
 test-iso: ## Test ISO in QEMU
 	@bash scripts/run-qemu.sh $(BUILD_DIR)/agnostikos-latest.iso
 
-test-iso-headless: ## Test ISO in QEMU (headless mode, for CI)
-	HEADLESS=1 bash scripts/run-qemu.sh $(BUILD_DIR)/agnostikos-latest.iso
+# Timeout for headless ISO test in CI (300s for TCG emulation)
+TEST_ISO_TIMEOUT ?= 300
+
+test-iso-headless: ## Test ISO in QEMU (headless, for CI)
+	HEADLESS=1 BOOT_TIMEOUT=$(TEST_ISO_TIMEOUT) bash scripts/run-qemu.sh $(BUILD_DIR)/agnostikos-latest.iso
 
 lint: ## Run golangci-lint
 	golangci-lint run ./...
@@ -41,6 +44,9 @@ deps: ## Download Go dependencies
 
 iso: build ## Build ISO from RootFS (uses LFS env var or /mnt/lfs)
 	@$(BUILD_DIR)/$(BINARY_NAME) iso build $(LFS) --output $(BUILD_DIR)/agnostikos-latest.iso
+
+bootstrap: build ## Bootstrap RootFS into $(LFS)
+	@sudo $(BUILD_DIR)/$(BINARY_NAME) bootstrap $(LFS)
 
 dev: ## Run in development mode
 	@$(GO) run . --help

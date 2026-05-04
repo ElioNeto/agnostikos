@@ -1,28 +1,35 @@
 {
-  "issue_number": 15,
-  "title": "[DOCS] README e documentação inicial do projeto",
-  "status": "complete",
+  "issue": "20",
+  "title": "[RELEASE] Primeira release v0.1.0 via GoReleaser",
   "todos": [
     {
       "id": "todo-1",
-      "title": "Update README.md with project description, prerequisites table, quick start, backends comparison table, example config, and streamlined roadmap",
-      "required": true,
-      "status": "done",
-      "files": ["README.md"]
+      "title": "Review .goreleaser.yml for correctness",
+      "file": ".goreleaser.yml",
+      "done": true,
+      "dep": []
     },
     {
       "id": "todo-2",
-      "title": "Create CONTRIBUTING.md with dev environment setup, Conventional Commits rules, test/lint workflows, and PR checklist",
-      "required": true,
-      "status": "done",
-      "files": ["CONTRIBUTING.md"]
+      "title": "Create CHANGELOG.md with v0.1.0 release notes",
+      "file": "CHANGELOG.md",
+      "done": true,
+      "dep": []
     },
     {
       "id": "todo-3",
-      "title": "Create docs/architecture.md with ASCII module diagram (internal/* packages), end-to-end build flow (config→rootfs→iso→qemu), and key design decisions (Go, no SQLite, etc.)",
-      "required": true,
-      "status": "done",
-      "files": ["docs/architecture.md"]
+      "title": "Update README.md with release badge and download links",
+      "file": "README.md",
+      "done": true,
+      "dep": []
+    },
+    {
+      "id": "todo-4",
+      "title": "Create git tag v0.1.0 locally",
+      "file": "",
+      "done": true,
+      "dep": ["todo-1"]
     }
-  ]
+  ],
+  "status": "completed"
 }

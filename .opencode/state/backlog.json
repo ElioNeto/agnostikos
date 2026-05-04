@@ -1,5 +1,5 @@
 {
-  "last_sync": "2026-05-04T16:15:00Z",
+  "last_sync": "2026-05-04T18:30:00Z",
   "issues": [
     {
       "number": 4,
@@ -17,73 +17,71 @@
       "fetched_body": false
     },
     {
-      "number": 12,
+      "number": 16,
       "priority": "low",
-      "title": "[CI] GitHub Actions: pipeline de lint, test e build multiplataforma",
-      "status": "open",
-      "depends_on": [
-        1
-      ],
-      "blocks": [
-        4
-      ],
-      "acceptance_summary": [
-        "go test -race ./... passa sem data races",
-        "golangci-lint passa sem erros (incluindo errcheck)",
-        "Build verificado em ubuntu-latest",
-        "Release automático via tag v*"
-      ],
-      "fetched_body": false
-    },
-    {
-      "number": 13,
-      "priority": "low",
-      "title": "[ISO] ISO Builder: geração de ISO bootável com mkisofs/xorriso",
-      "status": "open",
-      "depends_on": [
-        2
-      ],
-      "blocks": [
-        4
-      ],
-      "acceptance_summary": [
-        "make iso gera agnostikos.iso sem erros",
-        "ISO é bootável em BIOS e UEFI (validado pelo #4)",
-        "Checksum SHA256 gerado automaticamente",
-        "Testes unitários com mock de executor passam",
-        "Lint e testes do módulo passam"
-      ],
-      "fetched_body": false
-    },
-    {
-      "number": 14,
-      "priority": "low",
-      "title": "[CONFIG] Sistema de configuração: perfis de instalação e agnostic.yaml",
-      "status": "open",
-      "depends_on": [
-        3
-      ],
-      "blocks": [],
-      "acceptance_summary": [
-        "agnostic install --config agnostic.yaml instala todos os pacotes definidos",
-        "Configuração inválida retorna erro descritivo (sem panic)",
-        "agnostic.yaml.example presente e documentado",
-        "Lint e testes do módulo passam"
-      ],
-      "fetched_body": false
-    },
-    {
-      "number": 15,
-      "priority": "low",
-      "title": "[DOCS] README e documentação inicial do projeto",
+      "title": "[CI] Corrigir run-qemu.sh: propagar exit code quando QEMU não encontrado",
       "status": "open",
       "depends_on": [],
       "blocks": [],
       "acceptance_summary": [
-        "README.md com instruções claras de instalação e uso",
-        "CONTRIBUTING.md presente",
-        "docs/architecture.md com diagrama de módulos",
-        "Sem referências a arquitetura legada ou placeholders"
+        "make test-iso falha com mensagem clara quando QEMU não está instalado",
+        "Exit code 1 propagado corretamente para o Makefile",
+        "CI não passa falsamente sem QEMU"
+      ],
+      "fetched_body": false
+    },
+    {
+      "number": 17,
+      "priority": "low",
+      "title": "[BUILD] Adicionar target bootstrap no Makefile",
+      "status": "open",
+      "depends_on": [],
+      "blocks": [],
+      "acceptance_summary": [
+        "make bootstrap cria a estrutura FHS em $(LFS) sem erros",
+        "Pipeline completo deps → build → test → bootstrap → iso → test-iso executa sem intervenção manual"
+      ],
+      "fetched_body": false
+    },
+    {
+      "number": 18,
+      "priority": "low",
+      "title": "[BOOTSTRAP] RootFS real: kernel, GRUB e init mínimo bootável",
+      "status": "open",
+      "depends_on": [17],
+      "blocks": [],
+      "acceptance_summary": [
+        "make bootstrap && make iso && make test-iso resulta em VM que dá boot até o prompt",
+        "Boot BIOS e UEFI funcionando",
+        "make test-iso-headless passável no CI"
+      ],
+      "fetched_body": false
+    },
+    {
+      "number": 19,
+      "priority": "low",
+      "title": "[CI] Integrar test-iso-headless no GitHub Actions com ISO mínima",
+      "status": "open",
+      "depends_on": [16, 18],
+      "blocks": [],
+      "acceptance_summary": [
+        "make test-iso-headless passa no GitHub Actions sem KVM",
+        "Fallback TCG automático quando KVM não disponível",
+        "CI completo: lint → test → build → iso → test-iso-headless"
+      ],
+      "fetched_body": false
+    },
+    {
+      "number": 20,
+      "priority": "low",
+      "title": "[RELEASE] Primeira release v0.1.0 via GoReleaser",
+      "status": "open",
+      "depends_on": [16, 17],
+      "blocks": [],
+      "acceptance_summary": [
+        "Release v0.1.0 publicada com binários para linux/amd64 e linux/arm64",
+        "Checksums SHA256 presentes",
+        "READ ME atualizado com link para download"
       ],
       "fetched_body": false
     }

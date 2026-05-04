@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -157,5 +158,98 @@ func UnmountVirtualFS(target string) error {
 	for _, p := range []string{"dev/pts", "dev", "run", "proc", "sys"} {
 		_ = exec.Command("umount", filepath.Join(target, p)).Run()
 	}
+	return nil
+}
+
+// BootstrapConfig contém todos os parâmetros para a construção completa do RootFS
+type BootstrapConfig struct {
+	TargetDir      string // diretório raiz do RootFS (ex: /mnt/lfs)
+	KernelVersion  string // versão do kernel Linux (ex: "6.6")
+	BusyboxVersion string // versão do Busybox (ex: "1.36.1")
+	UEFI           bool   // gerar estrutura UEFI
+	SkipKernel     bool   // pular compilação do kernel
+	SkipBusybox    bool   // pular compilação do busybox
+	SkipInitramfs  bool   // pular geração do initramfs
+	SkipGRUB       bool   // pular instalação do GRUB
+}
+
+// BootstrapAll executa o pipeline completo de construção do RootFS
+func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
+	if cfg.TargetDir == "" {
+		cfg.TargetDir = resolveLFSTarget("")
+	}
+
+	fmt.Printf("[bootstrap] Starting full bootstrap at %s\n", cfg.TargetDir)
+	fmt.Printf("[bootstrap] Config: kernel=%s busybox=%s uefi=%v\n",
+		cfg.KernelVersion, cfg.BusyboxVersion, cfg.UEFI)
+
+	// 1. Create RootFS structure (FHS directories)
+	fmt.Println("\n=== Step 1/6: Create RootFS ===")
+	if err := CreateRootFS(cfg.TargetDir); err != nil {
+		return fmt.Errorf("create rootfs: %w", err)
+	}
+
+	// 2. Download toolchain
+	fmt.Println("\n=== Step 2/6: Download Toolchain ===")
+	if err := DownloadToolchain(cfg.TargetDir); err != nil {
+		return fmt.Errorf("download toolchain: %w", err)
+	}
+
+	// 3. Build kernel
+	if !cfg.SkipKernel {
+		fmt.Println("\n=== Step 3/6: Build Kernel ===")
+		kernelCfg := KernelConfig{
+			Version:    cfg.KernelVersion,
+			SourcesDir: filepath.Join(cfg.TargetDir, "sources"),
+			OutputDir:  filepath.Join(cfg.TargetDir, "boot"),
+			Defconfig:  "x86_64_defconfig",
+		}
+		if err := BuildKernel(kernelCfg); err != nil {
+			return fmt.Errorf("build kernel: %w", err)
+		}
+	} else {
+		fmt.Println("\n=== Step 3/6: Build Kernel (skipped) ===")
+	}
+
+	// 4. Build busybox
+	if !cfg.SkipBusybox {
+		fmt.Println("\n=== Step 4/6: Build Busybox ===")
+		busyboxCfg := BusyboxConfig{
+			Version:   cfg.BusyboxVersion,
+			TargetDir: cfg.TargetDir,
+		}
+		if err := BuildBusybox(ctx, busyboxCfg); err != nil {
+			return fmt.Errorf("build busybox: %w", err)
+		}
+	} else {
+		fmt.Println("\n=== Step 4/6: Build Busybox (skipped) ===")
+	}
+
+	// 5. Build initramfs
+	if !cfg.SkipInitramfs {
+		fmt.Println("\n=== Step 5/6: Build Initramfs ===")
+		outputDir := filepath.Join(cfg.TargetDir, "boot")
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			return fmt.Errorf("mkdir boot: %w", err)
+		}
+		initramfsPath := filepath.Join(outputDir, "initramfs.img")
+		if err := BuildInitramfs(ctx, cfg.TargetDir, initramfsPath); err != nil {
+			return fmt.Errorf("build initramfs: %w", err)
+		}
+	} else {
+		fmt.Println("\n=== Step 5/6: Build Initramfs (skipped) ===")
+	}
+
+	// 6. Install GRUB
+	if !cfg.SkipGRUB {
+		fmt.Println("\n=== Step 6/6: Install GRUB ===")
+		if err := InstallGRUB(ctx, cfg.TargetDir, cfg.UEFI); err != nil {
+			return fmt.Errorf("install grub: %w", err)
+		}
+	} else {
+		fmt.Println("\n=== Step 6/6: Install GRUB (skipped) ===")
+	}
+
+	fmt.Printf("\n[bootstrap] ✅ Bootstrap complete at %s\n", cfg.TargetDir)
 	return nil
 }

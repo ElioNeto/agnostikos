@@ -5,6 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go)](https://go.dev/)
 [![CI](https://github.com/ElioNeto/agnostikos/actions/workflows/build.yml/badge.svg)](https://github.com/ElioNeto/agnostikos/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/ElioNeto/agnostikos?include_prereleases&sort=semver)](https://github.com/ElioNeto/agnostikos/releases)
 
 ---
 
@@ -107,8 +108,11 @@ make fmt         # Format Go code
 make install     # Install to /usr/local/bin
 make clean       # Remove build artifacts
 make iso         # Build ISO from RootFS
+make bootstrap   # Bootstrap RootFS into $(LFS) (requires root)
 make dev         # Run in development mode
 ```
+
+> **Note:** `make bootstrap` requires **root privileges** because it mounts virtual filesystems (proc, sys, dev) into the target RootFS directory.
 
 ---
 
@@ -160,6 +164,18 @@ agnostic install --config agnostic.yaml
 - [ ] QEMU smoke test in CI
 - [ ] `agnostic.yaml` schema validation
 - [ ] Multi-architecture support (ARM64)
+
+---
+
+## ⬇️ Download
+
+Pre-built binaries for Linux (amd64 and arm64) are available on the
+[Releases page](https://github.com/ElioNeto/agnostikos/releases).
+
+Each release includes:
+- `agnostikos_<version>_linux_amd64.tar.gz`
+- `agnostikos_<version>_linux_arm64.tar.gz`
+- `checksums.txt` (SHA256)
 
 ---
 

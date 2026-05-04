@@ -87,7 +87,9 @@ Commit messages must be in **English**, present tense, imperative mood.
    make deps
    make build
    make test
-   make lint
+   make bootstrap
+   make iso
+   make test-iso
    ```
 
 4. **Push and open a PR** against `main`.
