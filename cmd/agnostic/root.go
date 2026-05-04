@@ -5,6 +5,9 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"bytes"
+	"testing"
 )
 
 var (
@@ -38,4 +41,23 @@ func Execute() {
 
 func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
+}
+
+func TestRootCmd(t *testing.T) {
+	buf := &bytes.Buffer{}
+	rootCmd.SetOut(buf)
+	rootCmd.SetArgs([]string{"--version"})
+	if err := removeCmd.Execute(); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+func TestRootCmd_Help(t *testing.T) {
+	buf := &bytes.Buffer{}
+	rootCmd.SetOut(buf)
+	rootCmd.SetArgs([]string{"--help"})
+	rootCmd.Execute()
+	if buf.Len() == 0 {
+		t.Error("expected help output, got empty")
+	}
 }
