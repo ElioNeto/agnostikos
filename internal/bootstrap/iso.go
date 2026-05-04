@@ -138,6 +138,31 @@ func setupIsolinux(isoDir string, cfg ISOConfig) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("mkdir isolinux: %w", err)
 	}
+
+	// Copiar isolinux.bin do host
+	isolinuxBin := ""
+	candidates := []string{
+		"/usr/lib/syslinux/bios/isolinux.bin",
+		"/usr/lib/syslinux/isolinux.bin",
+		"/usr/share/syslinux/isolinux.bin",
+	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			isolinuxBin = p
+			break
+		}
+	}
+	if isolinuxBin == "" {
+		return fmt.Errorf("isolinux.bin not found — install syslinux")
+	}
+	data, err := os.ReadFile(isolinuxBin)
+	if err != nil {
+		return fmt.Errorf("read isolinux.bin: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "isolinux.bin"), data, 0644); err != nil {
+		return fmt.Errorf("write isolinux.bin: %w", err)
+	}
+
 	cfgContent := `DEFAULT agnostic
 TIMEOUT 50
 LABEL agnostic
