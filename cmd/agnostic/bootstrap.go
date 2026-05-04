@@ -13,3 +13,9 @@ var bootstrapCmd = &cobra.Command{
 		return bootstrap.CreateRootFS(target)
 	},
 }
+
+func init() {
+	bootstrapCmd.Flags().StringP("target", "t", "", "Target directory (default: $LFS or /mnt/lfs)")
+	bootstrapCmd.Flags().BoolP("download-toolchain", "d", false, "Download binutils, gcc, glibc into sources/")
+	rootCmd.AddCommand(bootstrapCmd)
+}
