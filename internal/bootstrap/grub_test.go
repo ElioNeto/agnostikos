@@ -11,7 +11,11 @@ import (
 func TestInstallGRUB_CreatesGrubCfg(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	err := InstallGRUB(context.Background(), tmpDir, false)
+	err := InstallGRUB(context.Background(), GRUBConfig{
+		RootfsDir: tmpDir,
+		Device:    "/dev/sda",
+		UEFI:      false,
+	})
 	if err != nil {
 		t.Fatalf("InstallGRUB failed: %v", err)
 	}
@@ -47,7 +51,11 @@ func TestInstallGRUB_CreatesGrubCfg(t *testing.T) {
 func TestInstallGRUB_BIOSMode(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	err := InstallGRUB(context.Background(), tmpDir, false)
+	err := InstallGRUB(context.Background(), GRUBConfig{
+		RootfsDir: tmpDir,
+		Device:    "/dev/sda",
+		UEFI:      false,
+	})
 	if err != nil {
 		t.Fatalf("InstallGRUB (BIOS) failed: %v", err)
 	}
@@ -68,7 +76,10 @@ func TestInstallGRUB_BIOSMode(t *testing.T) {
 func TestInstallGRUB_UEFIMode(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	err := InstallGRUB(context.Background(), tmpDir, true)
+	err := InstallGRUB(context.Background(), GRUBConfig{
+		RootfsDir: tmpDir,
+		UEFI:      true,
+	})
 	if err != nil {
 		t.Fatalf("InstallGRUB (UEFI) failed: %v", err)
 	}
@@ -93,7 +104,11 @@ func TestInstallGRUB_UEFIMode(t *testing.T) {
 }
 
 func TestInstallGRUB_EmptyRootfs(t *testing.T) {
-	err := InstallGRUB(context.Background(), "", false)
+	err := InstallGRUB(context.Background(), GRUBConfig{
+		RootfsDir: "",
+		Device:    "/dev/sda",
+		UEFI:      false,
+	})
 	if err == nil {
 		t.Error("expected error for empty rootfs dir")
 	}
@@ -102,10 +117,29 @@ func TestInstallGRUB_EmptyRootfs(t *testing.T) {
 	}
 }
 
+func TestInstallGRUB_MissingDeviceBIOS(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	err := InstallGRUB(context.Background(), GRUBConfig{
+		RootfsDir: tmpDir,
+		Device:    "",
+		UEFI:      false,
+	})
+	if err == nil {
+		t.Error("expected error for missing device in BIOS mode")
+	}
+	if !strings.Contains(err.Error(), "device is required") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
 func TestInstallGRUB_GrubCfgContent(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	err := InstallGRUB(context.Background(), tmpDir, true)
+	err := InstallGRUB(context.Background(), GRUBConfig{
+		RootfsDir: tmpDir,
+		UEFI:      true,
+	})
 	if err != nil {
 		t.Fatalf("InstallGRUB failed: %v", err)
 	}
@@ -117,8 +151,6 @@ func TestInstallGRUB_GrubCfgContent(t *testing.T) {
 	}
 
 	content := string(data)
-
-	// Verify exact expected content
 	expectedParts := []string{
 		"set timeout=5",
 		"set default=0",

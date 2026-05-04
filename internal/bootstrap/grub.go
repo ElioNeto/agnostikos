@@ -51,7 +51,7 @@ menuentry "Agnostikos Linux" {
 			return fmt.Errorf("mkdir efi dir: %w", err)
 		}
 
-		efiStub := "#!/bin/sh\n# Placeholder EFI stub\n# Run: grub-install --target=x86_64-efi --root-directory=" + cfg.RootfsDir + "\n"
+		efiStub := "#!/bin/sh\n# Placeholder EFI stub - replace with real grub-install output\n# Run: grub-install --target=x86_64-efi --root-directory=" + cfg.RootfsDir + "\necho \"This is a placeholder EFI binary. Run grub-install to create the real one.\"\n"
 		efiPath := filepath.Join(efiDir, "BOOTx64.EFI")
 		if err := os.WriteFile(efiPath, []byte(efiStub), 0755); err != nil {
 			return fmt.Errorf("write BOOTx64.EFI: %w", err)
