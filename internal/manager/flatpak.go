@@ -3,13 +3,18 @@ package manager
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 )
 
 // FlatpakBackend implementa PackageService usando flatpak
-type FlatpakBackend struct{}
+type FlatpakBackend struct {
+	exec Executor
+}
+
+func NewFlatpakBackend() *FlatpakBackend {
+	return &FlatpakBackend{exec: &RealExecutor{}}
+}
 
 func (f *FlatpakBackend) Install(pkgName string) error {
 	if strings.TrimSpace(pkgName) == "" {
@@ -17,7 +22,7 @@ func (f *FlatpakBackend) Install(pkgName string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "flatpak", "install", "--noninteractive", "-y", pkgName).CombinedOutput()
+	out, err := f.exec.RunContext(ctx, "flatpak", "install", "--noninteractive", "-y", pkgName)
 	if err != nil {
 		return fmt.Errorf("flatpak install: %s — %s", err, strings.TrimSpace(string(out)))
 	}
@@ -30,7 +35,7 @@ func (f *FlatpakBackend) Remove(pkgName string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "flatpak", "uninstall", "--noninteractive", "-y", pkgName).CombinedOutput()
+	out, err := f.exec.RunContext(ctx, "flatpak", "uninstall", "--noninteractive", "-y", pkgName)
 	if err != nil {
 		return fmt.Errorf("flatpak remove: %s — %s", err, strings.TrimSpace(string(out)))
 	}
@@ -40,7 +45,7 @@ func (f *FlatpakBackend) Remove(pkgName string) error {
 func (f *FlatpakBackend) Update() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "flatpak", "update", "--noninteractive", "-y").CombinedOutput()
+	out, err := f.exec.RunContext(ctx, "flatpak", "update", "--noninteractive", "-y")
 	if err != nil {
 		return fmt.Errorf("flatpak update: %s — %s", err, strings.TrimSpace(string(out)))
 	}
@@ -53,7 +58,7 @@ func (f *FlatpakBackend) Search(query string) ([]string, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "flatpak", "search", "--columns=application,name,description", query).CombinedOutput()
+	out, err := f.exec.RunContext(ctx, "flatpak", "search", "--columns=application,name,description", query)
 	if err != nil && len(out) == 0 {
 		return nil, fmt.Errorf("flatpak search: %s", err)
 	}
