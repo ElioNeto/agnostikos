@@ -1,72 +1,282 @@
 package manager
 
 import (
+	"context"
 	"errors"
 	"testing"
 )
 
-// MockBackend implementa PackageService para testes
-type MockBackend struct {
-	InstallErr error
-	RemoveErr  error
-	UpdateErr  error
-	SearchRes  []string
-	SearchErr  error
+// MockExecutor substitui RealExecutor nos testes
+type MockExecutor struct {
+	Output []byte
+	Err    error
 }
 
-func (m *MockBackend) Install(pkgName string) error { return m.InstallErr }
-func (m *MockBackend) Remove(pkgName string) error  { return m.RemoveErr }
-func (m *MockBackend) Update() error                { return m.UpdateErr }
-func (m *MockBackend) Search(query string) ([]string, error) {
-	return m.SearchRes, m.SearchErr
+func (m *MockExecutor) RunContext(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return m.Output, m.Err
 }
 
-func TestMockBackend_Install_Success(t *testing.T) {
-	svc := &MockBackend{}
-	if err := svc.Install("firefox"); err != nil {
+// --- PacmanBackend ---
+
+func TestPacmanBackend_Install_EmptyName(t *testing.T) {
+	p := &PacmanBackend{exec: &MockExecutor{}}
+	if err := p.Install(""); err == nil {
+		t.Error("expected error for empty package name")
+	}
+}
+
+func TestPacmanBackend_Install_Success(t *testing.T) {
+	p := &PacmanBackend{exec: &MockExecutor{Output: []byte("installed")}}
+	if err := p.Install("firefox"); err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
 }
 
-func TestMockBackend_Install_Error(t *testing.T) {
-	svc := &MockBackend{InstallErr: errors.New("install failed")}
-	if err := svc.Install("firefox"); err == nil {
+func TestPacmanBackend_Install_ExecError(t *testing.T) {
+	p := &PacmanBackend{exec: &MockExecutor{Err: errors.New("pacman: not found")}}
+	if err := p.Install("firefox"); err == nil {
 		t.Error("expected error, got nil")
 	}
 }
 
-func TestMockBackend_Remove_Success(t *testing.T) {
-	svc := &MockBackend{}
-	if err := svc.Remove("firefox"); err != nil {
+func TestPacmanBackend_Remove_EmptyName(t *testing.T) {
+	p := &PacmanBackend{exec: &MockExecutor{}}
+	if err := p.Remove(""); err == nil {
+		t.Error("expected error for empty package name")
+	}
+}
+
+func TestPacmanBackend_Remove_Success(t *testing.T) {
+	p := &PacmanBackend{exec: &MockExecutor{}}
+	if err := p.Remove("firefox"); err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
 }
 
-func TestMockBackend_Update_Success(t *testing.T) {
-	svc := &MockBackend{}
-	if err := svc.Update(); err != nil {
+func TestPacmanBackend_Remove_ExecError(t *testing.T) {
+	p := &PacmanBackend{exec: &MockExecutor{Err: errors.New("pacman: not found")}}
+	if err := p.Remove("firefox"); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestPacmanBackend_Update_Success(t *testing.T) {
+	p := &PacmanBackend{exec: &MockExecutor{}}
+	if err := p.Update(); err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
 }
 
-func TestMockBackend_Search_Success(t *testing.T) {
-	svc := &MockBackend{SearchRes: []string{"firefox", "firefox-esr"}}
-	results, err := svc.Search("firefox")
+func TestPacmanBackend_Update_ExecError(t *testing.T) {
+	p := &PacmanBackend{exec: &MockExecutor{Err: errors.New("update failed")}}
+	if err := p.Update(); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestPacmanBackend_Search_EmptyQuery(t *testing.T) {
+	p := &PacmanBackend{exec: &MockExecutor{}}
+	if _, err := p.Search(""); err == nil {
+		t.Error("expected error for empty query")
+	}
+}
+
+func TestPacmanBackend_Search_Success(t *testing.T) {
+	output := "extra/firefox 124.0-1\n    Fast web browser\nextra/firefox-esr 115.0-1\n    Extended support release"
+	p := &PacmanBackend{exec: &MockExecutor{Output: []byte(output)}}
+	results, err := p.Search("firefox")
 	if err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
 	if len(results) != 2 {
-		t.Errorf("expected 2 results, got %d", len(results))
+		t.Errorf("expected 2 results (package lines only), got %d", len(results))
 	}
 }
 
-func TestMockBackend_Search_Error(t *testing.T) {
-	svc := &MockBackend{SearchErr: errors.New("search failed")}
-	_, err := svc.Search("firefox")
-	if err == nil {
+func TestPacmanBackend_Search_ExecError(t *testing.T) {
+	p := &PacmanBackend{exec: &MockExecutor{Err: errors.New("search failed")}}
+	if _, err := p.Search("firefox"); err == nil {
 		t.Error("expected error, got nil")
 	}
 }
+
+// --- NixBackend ---
+
+func TestNixBackend_Install_EmptyName(t *testing.T) {
+	n := &NixBackend{exec: &MockExecutor{}}
+	if err := n.Install(""); err == nil {
+		t.Error("expected error for empty package name")
+	}
+}
+
+func TestNixBackend_Install_AddsPrefixAutomatically(t *testing.T) {
+	n := &NixBackend{exec: &MockExecutor{}}
+	// sem # no nome → deve adicionar nixpkgs# internamente sem erro
+	if err := n.Install("neovim"); err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+}
+
+func TestNixBackend_Install_WithPrefix(t *testing.T) {
+	n := &NixBackend{exec: &MockExecutor{}}
+	if err := n.Install("nixpkgs#neovim"); err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+}
+
+func TestNixBackend_Install_ExecError(t *testing.T) {
+	n := &NixBackend{exec: &MockExecutor{Err: errors.New("nix: not found")}}
+	if err := n.Install("neovim"); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestNixBackend_Remove_EmptyName(t *testing.T) {
+	n := &NixBackend{exec: &MockExecutor{}}
+	if err := n.Remove(""); err == nil {
+		t.Error("expected error for empty package name")
+	}
+}
+
+func TestNixBackend_Remove_Success(t *testing.T) {
+	n := &NixBackend{exec: &MockExecutor{}}
+	if err := n.Remove("neovim"); err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+}
+
+func TestNixBackend_Remove_ExecError(t *testing.T) {
+	n := &NixBackend{exec: &MockExecutor{Err: errors.New("remove failed")}}
+	if err := n.Remove("neovim"); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestNixBackend_Update_Success(t *testing.T) {
+	n := &NixBackend{exec: &MockExecutor{}}
+	if err := n.Update(); err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+}
+
+func TestNixBackend_Update_ExecError(t *testing.T) {
+	n := &NixBackend{exec: &MockExecutor{Err: errors.New("upgrade failed")}}
+	if err := n.Update(); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestNixBackend_Search_EmptyQuery(t *testing.T) {
+	n := &NixBackend{exec: &MockExecutor{}}
+	if _, err := n.Search(""); err == nil {
+		t.Error("expected error for empty query")
+	}
+}
+
+func TestNixBackend_Search_Success(t *testing.T) {
+	output := "* legacyPackages.x86_64-linux.neovim (0.9.5)\n  Vim text editor fork focused on extensibility"
+	n := &NixBackend{exec: &MockExecutor{Output: []byte(output)}}
+	results, err := n.Search("neovim")
+	if err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("expected 1 result, got %d", len(results))
+	}
+}
+
+func TestNixBackend_Search_ExecError(t *testing.T) {
+	n := &NixBackend{exec: &MockExecutor{Err: errors.New("search failed")}}
+	if _, err := n.Search("neovim"); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+// --- FlatpakBackend ---
+
+func TestFlatpakBackend_Install_EmptyName(t *testing.T) {
+	f := &FlatpakBackend{exec: &MockExecutor{}}
+	if err := f.Install(""); err == nil {
+		t.Error("expected error for empty package name")
+	}
+}
+
+func TestFlatpakBackend_Install_Success(t *testing.T) {
+	f := &FlatpakBackend{exec: &MockExecutor{}}
+	if err := f.Install("com.spotify.Client"); err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+}
+
+func TestFlatpakBackend_Install_ExecError(t *testing.T) {
+	f := &FlatpakBackend{exec: &MockExecutor{Err: errors.New("flatpak: not found")}}
+	if err := f.Install("com.spotify.Client"); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestFlatpakBackend_Remove_EmptyName(t *testing.T) {
+	f := &FlatpakBackend{exec: &MockExecutor{}}
+	if err := f.Remove(""); err == nil {
+		t.Error("expected error for empty package name")
+	}
+}
+
+func TestFlatpakBackend_Remove_Success(t *testing.T) {
+	f := &FlatpakBackend{exec: &MockExecutor{}}
+	if err := f.Remove("com.spotify.Client"); err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+}
+
+func TestFlatpakBackend_Remove_ExecError(t *testing.T) {
+	f := &FlatpakBackend{exec: &MockExecutor{Err: errors.New("remove failed")}}
+	if err := f.Remove("com.spotify.Client"); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestFlatpakBackend_Update_Success(t *testing.T) {
+	f := &FlatpakBackend{exec: &MockExecutor{}}
+	if err := f.Update(); err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+}
+
+func TestFlatpakBackend_Update_ExecError(t *testing.T) {
+	f := &FlatpakBackend{exec: &MockExecutor{Err: errors.New("update failed")}}
+	if err := f.Update(); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestFlatpakBackend_Search_EmptyQuery(t *testing.T) {
+	f := &FlatpakBackend{exec: &MockExecutor{}}
+	if _, err := f.Search(""); err == nil {
+		t.Error("expected error for empty query")
+	}
+}
+
+func TestFlatpakBackend_Search_Success(t *testing.T) {
+	output := "Application\tName\tDescription\ncom.spotify.Client\tSpotify\tMusic streaming\norg.mozilla.firefox\tFirefox\tWeb browser"
+	f := &FlatpakBackend{exec: &MockExecutor{Output: []byte(output)}}
+	results, err := f.Search("firefox")
+	if err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+	if len(results) != 2 {
+		t.Errorf("expected 2 results (sem header), got %d", len(results))
+	}
+}
+
+func TestFlatpakBackend_Search_ExecError(t *testing.T) {
+	f := &FlatpakBackend{exec: &MockExecutor{Err: errors.New("search failed")}}
+	if _, err := f.Search("firefox"); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+// --- AgnosticManager ---
 
 func TestNewAgnosticManager_HasAllBackends(t *testing.T) {
 	mgr := NewAgnosticManager()
@@ -77,32 +287,32 @@ func TestNewAgnosticManager_HasAllBackends(t *testing.T) {
 	}
 }
 
-func TestPacmanBackend_EmptyPackageName(t *testing.T) {
-	p := &PacmanBackend{}
-	if err := p.Install(""); err == nil {
-		t.Error("expected error for empty package name")
-	}
-	if err := p.Remove(""); err == nil {
-		t.Error("expected error for empty package name")
+func TestAgnosticManager_RegisterBackend(t *testing.T) {
+	mgr := NewAgnosticManager()
+	mgr.RegisterBackend("mock", &MockBackend{})
+	if _, ok := mgr.Backends["mock"]; !ok {
+		t.Error("expected mock backend to be registered")
 	}
 }
 
-func TestNixBackend_EmptyPackageName(t *testing.T) {
-	n := &NixBackend{}
-	if err := n.Install(""); err == nil {
-		t.Error("expected error for empty package name")
-	}
-	if err := n.Remove(""); err == nil {
-		t.Error("expected error for empty package name")
+func TestAgnosticManager_ListBackends(t *testing.T) {
+	mgr := NewAgnosticManager()
+	list := mgr.ListBackends()
+	if len(list) != 3 {
+		t.Errorf("expected 3 backends, got %d", len(list))
 	}
 }
 
-func TestFlatpakBackend_EmptyPackageName(t *testing.T) {
-	f := &FlatpakBackend{}
-	if err := f.Install(""); err == nil {
-		t.Error("expected error for empty package name")
-	}
-	if err := f.Remove(""); err == nil {
-		t.Error("expected error for empty package name")
-	}
+// MockBackend implementa PackageService para testes de manager
+type MockBackend struct {
+	InstallErr error
+	RemoveErr  error
+	UpdateErr  error
+	SearchRes  []string
+	SearchErr  error
 }
+
+func (m *MockBackend) Install(pkgName string) error            { return m.InstallErr }
+func (m *MockBackend) Remove(pkgName string) error             { return m.RemoveErr }
+func (m *MockBackend) Update() error                           { return m.UpdateErr }
+func (m *MockBackend) Search(q string) ([]string, error)       { return m.SearchRes, m.SearchErr }

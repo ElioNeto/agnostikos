@@ -17,9 +17,9 @@ type AgnosticManager struct {
 func NewAgnosticManager() *AgnosticManager {
 	return &AgnosticManager{
 		Backends: map[string]PackageService{
-			"pacman":  &PacmanBackend{},
-			"nix":     &NixBackend{},
-			"flatpak": &FlatpakBackend{},
+			"pacman":  NewPacmanBackend(),
+			"nix":     NewNixBackend(),
+			"flatpak": NewFlatpakBackend(),
 		},
 	}
 }

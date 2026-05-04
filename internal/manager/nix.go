@@ -3,13 +3,18 @@ package manager
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 )
 
 // NixBackend implementa PackageService usando nix
-type NixBackend struct{}
+type NixBackend struct {
+	exec Executor
+}
+
+func NewNixBackend() *NixBackend {
+	return &NixBackend{exec: &RealExecutor{}}
+}
 
 func (n *NixBackend) Install(pkgName string) error {
 	if strings.TrimSpace(pkgName) == "" {
@@ -17,12 +22,11 @@ func (n *NixBackend) Install(pkgName string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	// nix profile install aceita atributos no formato nixpkgs#pkg
 	pkg := pkgName
 	if !strings.Contains(pkgName, "#") {
 		pkg = "nixpkgs#" + pkgName
 	}
-	out, err := exec.CommandContext(ctx, "nix", "profile", "install", pkg).CombinedOutput()
+	out, err := n.exec.RunContext(ctx, "nix", "profile", "install", pkg)
 	if err != nil {
 		return fmt.Errorf("nix install: %s — %s", err, strings.TrimSpace(string(out)))
 	}
@@ -35,7 +39,7 @@ func (n *NixBackend) Remove(pkgName string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "nix", "profile", "remove", pkgName).CombinedOutput()
+	out, err := n.exec.RunContext(ctx, "nix", "profile", "remove", pkgName)
 	if err != nil {
 		return fmt.Errorf("nix remove: %s — %s", err, strings.TrimSpace(string(out)))
 	}
@@ -45,7 +49,7 @@ func (n *NixBackend) Remove(pkgName string) error {
 func (n *NixBackend) Update() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "nix", "profile", "upgrade", ".*").CombinedOutput()
+	out, err := n.exec.RunContext(ctx, "nix", "profile", "upgrade", ".*")
 	if err != nil {
 		return fmt.Errorf("nix update: %s — %s", err, strings.TrimSpace(string(out)))
 	}
@@ -58,15 +62,13 @@ func (n *NixBackend) Search(query string) ([]string, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	// --json retorna saída estruturada; sem ele retorna texto legível
-	out, err := exec.CommandContext(ctx, "nix", "search", "nixpkgs", query).CombinedOutput()
+	out, err := n.exec.RunContext(ctx, "nix", "search", "nixpkgs", query)
 	if err != nil && len(out) == 0 {
 		return nil, fmt.Errorf("nix search: %s", err)
 	}
 	var results []string
 	for _, line := range strings.Split(string(out), "\n") {
 		line = strings.TrimSpace(line)
-		// linhas de resultado começam com "* legacyPackages." ou "* nixpkgs."
 		if strings.HasPrefix(line, "* ") {
 			results = append(results, strings.TrimPrefix(line, "* "))
 		}
