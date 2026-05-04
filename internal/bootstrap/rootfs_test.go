@@ -62,12 +62,16 @@ func TestDownloadToolchain_SkipsExisting(t *testing.T) {
 	defer os.RemoveAll(tmp)
 
 	sourcesDir := filepath.Join(tmp, "sources")
-	os.MkdirAll(sourcesDir, 0755)
+	if err := os.MkdirAll(sourcesDir, 0755); err != nil {
+		t.Fatalf("failed to create sourcesDir: %v", err)
+	}
 
 	// cria arquivos falsos simulando downloads já feitos
 	for _, pkg := range DefaultToolchain {
 		dest := filepath.Join(sourcesDir, filepath.Base(pkg.URL))
-		os.WriteFile(dest, []byte("fake"), 0644)
+		if err := os.WriteFile(dest, []byte("fake"), 0644); err != nil {
+			t.Fatalf("failed to write fake file %s: %v", dest, err)
+		}
 	}
 
 	// como todos já existem, não deve tentar baixar nada (sem rede)
