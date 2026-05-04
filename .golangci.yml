@@ -1,0 +1,36 @@
+# See https://golangci-lint.run/usage/configuration/
+linters:
+  enable:
+    - errcheck
+    - gocritic
+    - gosimple
+    - govet
+    - ineffassign
+    - shadow
+    - staticcheck
+    - unused
+  disable:
+    - exportloopref # deprecated
+  presets:
+    - bugs
+    - performance
+  fast: false
+
+linters-settings:
+  staticcheck:
+    checks:
+      - all
+
+run:
+  timeout: 5m
+  go: "1.24"
+  modules-download-mode: readonly
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
+
+output:
+  formats:
+    - format: colored-line-number
