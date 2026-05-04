@@ -13,6 +13,7 @@ type GRUBConfig struct {
 	RootfsDir string // ex: "/mnt/data"
 	Device    string // ex: "/dev/sda" — obrigatório para BIOS (disco base, sem número de partição)
 	UEFI      bool   // true = x86_64-efi, false = i386-pc
+	Strict    bool   // true = falha do grub-install retorna erro; false = apenas warn (seguro para testes)
 }
 
 // InstallGRUB configura o GRUB no RootFS (BIOS ou UEFI)
@@ -77,6 +78,7 @@ menuentry "Agnostikos Linux" {
 			fmt.Println("[grub] grub-install not found; BOOTx64.EFI is a placeholder")
 		}
 	} else {
+		// BIOS mode
 		if hasGrubInstall() {
 			fmt.Printf("[grub] grub-install found, attempting BIOS installation on %s...\n", cfg.Device)
 			grubInstCmd := exec.CommandContext(ctx, "grub-install",
@@ -87,9 +89,13 @@ menuentry "Agnostikos Linux" {
 			)
 			grubInstCmd.Stdout, grubInstCmd.Stderr = os.Stdout, os.Stderr
 			if err := grubInstCmd.Run(); err != nil {
-				return fmt.Errorf("grub-install BIOS on %s: %w", cfg.Device, err)
+				if cfg.Strict {
+					return fmt.Errorf("grub-install BIOS on %s: %w", cfg.Device, err)
+				}
+				fmt.Printf("[grub] warn: grub-install BIOS on %s failed: %v\n", cfg.Device, err)
+			} else {
+				fmt.Printf("[grub] grub-install (BIOS) completed on %s\n", cfg.Device)
 			}
-			fmt.Printf("[grub] grub-install (BIOS) completed on %s\n", cfg.Device)
 		} else {
 			fmt.Println("[grub] grub-install not found; grub.cfg created without bootloader installation")
 		}

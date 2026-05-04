@@ -64,7 +64,6 @@ func CreateRootFS(target string) error {
 		}
 	}
 
-	// Symlinks modernos (usrmerge)
 	symlinks := map[string]string{
 		filepath.Join(target, "lib"):     "usr/lib",
 		filepath.Join(target, "lib64"):   "usr/lib",
@@ -163,7 +162,7 @@ func UnmountVirtualFS(target string) error {
 
 // BootstrapConfig contém todos os parâmetros para a construção completa do RootFS
 type BootstrapConfig struct {
-	TargetDir      string // diretório raiz do RootFS (ex: /mnt/lfs)
+	TargetDir      string // diretório raiz do RootFS (ex: /mnt/lfs ou /mnt/data)
 	Device         string // disco base para grub-install BIOS (ex: /dev/sda)
 	KernelVersion  string // versão do kernel Linux (ex: "6.6")
 	BusyboxVersion string // versão do Busybox (ex: "1.36.1")
@@ -184,19 +183,16 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	fmt.Printf("[bootstrap] Config: kernel=%s busybox=%s uefi=%v\n",
 		cfg.KernelVersion, cfg.BusyboxVersion, cfg.UEFI)
 
-	// 1. Create RootFS structure (FHS directories)
 	fmt.Println("\n=== Step 1/6: Create RootFS ===")
 	if err := CreateRootFS(cfg.TargetDir); err != nil {
 		return fmt.Errorf("create rootfs: %w", err)
 	}
 
-	// 2. Download toolchain
 	fmt.Println("\n=== Step 2/6: Download Toolchain ===")
 	if err := DownloadToolchain(cfg.TargetDir); err != nil {
 		return fmt.Errorf("download toolchain: %w", err)
 	}
 
-	// 3. Build kernel
 	if !cfg.SkipKernel {
 		fmt.Println("\n=== Step 3/6: Build Kernel ===")
 		kernelCfg := KernelConfig{
@@ -212,7 +208,6 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 		fmt.Println("\n=== Step 3/6: Build Kernel (skipped) ===")
 	}
 
-	// 4. Build busybox
 	if !cfg.SkipBusybox {
 		fmt.Println("\n=== Step 4/6: Build Busybox ===")
 		busyboxCfg := BusyboxConfig{
@@ -226,7 +221,6 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 		fmt.Println("\n=== Step 4/6: Build Busybox (skipped) ===")
 	}
 
-	// 5. Build initramfs
 	if !cfg.SkipInitramfs {
 		fmt.Println("\n=== Step 5/6: Build Initramfs ===")
 		outputDir := filepath.Join(cfg.TargetDir, "boot")
@@ -241,13 +235,13 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 		fmt.Println("\n=== Step 5/6: Build Initramfs (skipped) ===")
 	}
 
-	// 6. Install GRUB
 	if !cfg.SkipGRUB {
 		fmt.Println("\n=== Step 6/6: Install GRUB ===")
 		if err := InstallGRUB(ctx, GRUBConfig{
 			RootfsDir: cfg.TargetDir,
 			Device:    cfg.Device,
 			UEFI:      cfg.UEFI,
+			Strict:    true, // pipeline real: falha do grub-install é erro fatal
 		}); err != nil {
 			return fmt.Errorf("install grub: %w", err)
 		}

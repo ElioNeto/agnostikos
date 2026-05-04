@@ -8,15 +8,16 @@ import (
 	"testing"
 )
 
+// biosCfg retorna um GRUBConfig BIOS seguro para testes unitários.
+// Strict: false garante que falha do grub-install (sem root/device real) vira warn.
+func biosCfg(rootfsDir string) GRUBConfig {
+	return GRUBConfig{RootfsDir: rootfsDir, Device: "/dev/sda", UEFI: false, Strict: false}
+}
+
 func TestInstallGRUB_CreatesGrubCfg(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	err := InstallGRUB(context.Background(), GRUBConfig{
-		RootfsDir: tmpDir,
-		Device:    "/dev/sda",
-		UEFI:      false,
-	})
-	if err != nil {
+	if err := InstallGRUB(context.Background(), biosCfg(tmpDir)); err != nil {
 		t.Fatalf("InstallGRUB failed: %v", err)
 	}
 
@@ -51,12 +52,7 @@ func TestInstallGRUB_CreatesGrubCfg(t *testing.T) {
 func TestInstallGRUB_BIOSMode(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	err := InstallGRUB(context.Background(), GRUBConfig{
-		RootfsDir: tmpDir,
-		Device:    "/dev/sda",
-		UEFI:      false,
-	})
-	if err != nil {
+	if err := InstallGRUB(context.Background(), biosCfg(tmpDir)); err != nil {
 		t.Fatalf("InstallGRUB (BIOS) failed: %v", err)
 	}
 
@@ -84,19 +80,16 @@ func TestInstallGRUB_UEFIMode(t *testing.T) {
 		t.Fatalf("InstallGRUB (UEFI) failed: %v", err)
 	}
 
-	// UEFI mode should create EFI directory
 	efiDir := filepath.Join(tmpDir, "boot", "efi", "EFI", "BOOT")
 	if _, err := os.Stat(efiDir); os.IsNotExist(err) {
 		t.Error("EFI directory should exist in UEFI mode")
 	}
 
-	// Should create BOOTx64.EFI (placeholder)
 	efiPath := filepath.Join(efiDir, "BOOTx64.EFI")
 	if _, err := os.Stat(efiPath); os.IsNotExist(err) {
 		t.Error("BOOTx64.EFI should exist in UEFI mode")
 	}
 
-	// Should still create grub.cfg
 	grubCfgPath := filepath.Join(tmpDir, "boot", "grub", "grub.cfg")
 	if _, err := os.Stat(grubCfgPath); os.IsNotExist(err) {
 		t.Error("grub.cfg should exist in UEFI mode")
@@ -130,6 +123,25 @@ func TestInstallGRUB_MissingDeviceBIOS(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "device is required") {
 		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+// TestInstallGRUB_StrictBIOSFails documenta o comportamento de Strict: true.
+// O dispositivo fake /dev/nonexistent garante falha controlada do grub-install.
+func TestInstallGRUB_StrictBIOSFails(t *testing.T) {
+	if !hasGrubInstall() {
+		t.Skip("grub-install not available")
+	}
+	tmpDir := t.TempDir()
+
+	err := InstallGRUB(context.Background(), GRUBConfig{
+		RootfsDir: tmpDir,
+		Device:    "/dev/nonexistent",
+		UEFI:      false,
+		Strict:    true,
+	})
+	if err == nil {
+		t.Error("expected error for Strict BIOS install with nonexistent device")
 	}
 }
 
