@@ -4,6 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go)](https://go.dev/)
+[![CI](https://github.com/ElioNeto/agnostikos/actions/workflows/build.yml/badge.svg)](https://github.com/ElioNeto/agnostikos/actions/workflows/build.yml)
 
 ## Overview
 
