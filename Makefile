@@ -1,4 +1,4 @@
-.PHONY: help build test clean install test-iso test-iso-headless lint fmt deps
+.PHONY: help build test clean install test-iso test-iso-headless lint fmt deps iso
 
 BINARY_NAME=agnostic
 BUILD_DIR=build
@@ -37,6 +37,9 @@ clean: ## Clean build artifacts
 deps: ## Download Go dependencies
 	$(GO) mod download
 	$(GO) mod tidy
+
+iso: build ## Build ISO from RootFS
+	@$(BUILD_DIR)/$(BINARY_NAME) iso build --output $(BUILD_DIR)/agnostikos-latest.iso
 
 dev: ## Run in development mode
 	@$(GO) run . --help

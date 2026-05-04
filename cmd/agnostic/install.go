@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ElioNeto/agnostikos/internal/config"
 	"github.com/ElioNeto/agnostikos/internal/manager"
 	"github.com/spf13/cobra"
 
@@ -16,10 +17,51 @@ var (
 )
 
 var installCmd = &cobra.Command{
-	Use:   "install [package]",
-	Short: "Install a package via the specified backend",
-	Args:  cobra.ExactArgs(1),
+	Use:   "install [package...]",
+	Short: "Install a package or all packages from a config file",
+	Long: `Install packages using the configured backend.
+
+If --config is provided, installs all packages defined in the config file (base + extra).
+Otherwise, install a single package specified as argument.`,
+	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// If --config is set, install all packages from the config file
+		if configFile != "" {
+			cfg, err := config.Load(configFile)
+			if err != nil {
+				return fmt.Errorf("loading config: %w", err)
+			}
+			if err := cfg.Validate(); err != nil {
+				return fmt.Errorf("invalid config: %w", err)
+			}
+
+			mgr := manager.NewAgnosticManager()
+			pkgs := append(cfg.Packages.Base, cfg.Packages.Extra...)
+			if len(pkgs) == 0 {
+				fmt.Println("No packages defined in config")
+				return nil
+			}
+
+			svc, ok := mgr.Backends[cfg.Backends.Default]
+			if !ok {
+				return fmt.Errorf("backend '%s' not found — available: pacman, nix, flatpak", cfg.Backends.Default)
+			}
+
+			for _, pkg := range pkgs {
+				fmt.Printf("📦 Installing '%s' via %s...\n", pkg, cfg.Backends.Default)
+				if err := svc.Install(pkg); err != nil {
+					return fmt.Errorf("installation of '%s' failed: %w", pkg, err)
+				}
+				fmt.Printf("✅ '%s' installed successfully\n", pkg)
+			}
+			return nil
+		}
+
+		// Fallback: install a single package from args
+		if len(args) == 0 {
+			return fmt.Errorf("requires a package name argument or --config flag")
+		}
+
 		mgr := manager.NewAgnosticManager()
 		svc, ok := mgr.Backends[backend]
 		if !ok {

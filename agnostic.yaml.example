@@ -1,0 +1,50 @@
+# agnostic.yaml — Arquivo de configuração do AgnosticOS
+#
+# Este arquivo define o perfil de instalação do sistema.
+# Utilize --config (ou -c) ao executar o agnostic para carregá-lo.
+#
+# Exemplo:
+#   agnostic install --config agnostic.yaml
+#
+# Todos os campos obrigatórios estão marcados com [requerido].
+
+# [requerido] Versão do perfil de configuração.
+version: "1.0"
+
+# [requerido] Locale do sistema (formato: <idioma>_<PAÍS>.<codificação>).
+locale: pt_BR.UTF-8
+
+# [opcional] Fuso horário do sistema.
+timezone: America/Sao_Paulo
+
+# [opcional] Lista de pacotes a serem instalados.
+packages:
+  # Pacotes base — instalados sempre que o perfil é aplicado.
+  base:
+    - vim
+    - git
+    - curl
+    - htop
+
+  # Pacotes extras — instalados além dos base quando --extra é especificado.
+  extra:
+    - docker
+    - neovim
+    - ripgrep
+    - fzf
+
+# [requerido] Configuração dos backends de pacotes.
+backends:
+  # [requerido] Backend padrão para instalação dos pacotes.
+  # Opções: pacman, nix, flatpak
+  default: pacman
+
+  # [opcional] Backend alternativo caso o padrão falhe.
+  fallback: nix
+
+# [opcional] Configuração do usuário padrão.
+user:
+  # Nome do usuário a ser criado/configurado.
+  name: dev
+  # Shell padrão do usuário.
+  shell: /bin/zsh

@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	Version = "0.1.0"
-	Commit  = "dev"
+	Version    = "0.1.0"
+	Commit     = "dev"
+	configFile string
 )
 
 var rootCmd = &cobra.Command{
@@ -40,6 +41,7 @@ func Execute() {
 
 func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
+	rootCmd.PersistentFlags().StringVarP(&configFile, "config", "c", "", "Path to agnostic.yaml config file")
 }
 
 func TestRootCmd(t *testing.T) {
