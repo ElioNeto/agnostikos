@@ -38,8 +38,8 @@ deps: ## Download Go dependencies
 	$(GO) mod download
 	$(GO) mod tidy
 
-iso: build ## Build ISO from RootFS
-	@$(BUILD_DIR)/$(BINARY_NAME) iso build --output $(BUILD_DIR)/agnostikos-latest.iso
+iso: build ## Build ISO from RootFS (uses LFS env var or /mnt/lfs)
+	@$(BUILD_DIR)/$(BINARY_NAME) iso build $(LFS) --output $(BUILD_DIR)/agnostikos-latest.iso
 
 dev: ## Run in development mode
 	@$(GO) run . --help
