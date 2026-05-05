@@ -164,6 +164,7 @@ func UnmountVirtualFS(target string) error {
 type BootstrapConfig struct {
 	TargetDir      string // diretório raiz do RootFS (ex: /mnt/lfs ou /mnt/data)
 	Device         string // disco base para grub-install BIOS (ex: /dev/sda)
+	EFIPartition   string // partição ESP para grub-install UEFI (ex: /dev/nvme0n1p1); se vazio, mount manual
 	KernelVersion  string // versão do kernel Linux (ex: "6.6")
 	BusyboxVersion string // versão do Busybox (ex: "1.36.1")
 	UEFI           bool   // gerar estrutura UEFI
@@ -238,10 +239,11 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	if !cfg.SkipGRUB {
 		fmt.Println("\n=== Step 6/6: Install GRUB ===")
 		if err := InstallGRUB(ctx, GRUBConfig{
-			RootfsDir: cfg.TargetDir,
-			Device:    cfg.Device,
-			UEFI:      cfg.UEFI,
-			Strict:    true, // pipeline real: falha do grub-install é erro fatal
+			RootfsDir:    cfg.TargetDir,
+			Device:       cfg.Device,
+			UEFI:         cfg.UEFI,
+			EFIPartition: cfg.EFIPartition,
+			Strict:       true,
 		}); err != nil {
 			return fmt.Errorf("install grub: %w", err)
 		}

@@ -10,10 +10,11 @@ import (
 
 // GRUBConfig contém os parâmetros de instalação do GRUB
 type GRUBConfig struct {
-	RootfsDir string // ex: "/mnt/data"
-	Device    string // ex: "/dev/sda" — obrigatório para BIOS (disco base, sem número de partição)
-	UEFI      bool   // true = x86_64-efi, false = i386-pc
-	Strict    bool   // true = falha do grub-install retorna erro; false = apenas warn (seguro para testes)
+	RootfsDir     string // ex: "/mnt/data"
+	Device        string // ex: "/dev/sda" — obrigatório para BIOS (disco base, sem número de partição)
+	UEFI          bool   // true = x86_64-efi, false = i386-pc
+	EFIPartition  string // ex: "/dev/nvme0n1p1" — se definido, monta a ESP antes do grub-install
+	Strict        bool   // true = falha do grub-install retorna erro; false = apenas warn (seguro para testes)
 }
 
 // InstallGRUB configura o GRUB no RootFS (BIOS ou UEFI)
@@ -47,15 +48,37 @@ menuentry "Agnostikos Linux" {
 	fmt.Printf("[grub] grub.cfg created at %s\n", grubCfgPath)
 
 	if cfg.UEFI {
-		efiDir := filepath.Join(bootDir, "efi", "EFI", "BOOT")
+		efiMountDir := filepath.Join(bootDir, "efi")
+		if err := os.MkdirAll(efiMountDir, 0755); err != nil {
+			return fmt.Errorf("mkdir efi mount dir: %w", err)
+		}
+
+		// Montar a ESP se EFIPartition foi especificado
+		efiMounted := false
+		if cfg.EFIPartition != "" {
+			fmt.Printf("[grub] mounting ESP %s -> %s\n", cfg.EFIPartition, efiMountDir)
+			if out, err := exec.CommandContext(ctx, "mount", cfg.EFIPartition, efiMountDir).CombinedOutput(); err != nil {
+				return fmt.Errorf("mount ESP %s: %s: %w", cfg.EFIPartition, string(out), err)
+			}
+			efiMounted = true
+			defer func() {
+				fmt.Printf("[grub] unmounting ESP %s\n", efiMountDir)
+				_ = exec.Command("umount", efiMountDir).Run()
+			}()
+		}
+
+		efiDir := filepath.Join(efiMountDir, "EFI", "BOOT")
 		if err := os.MkdirAll(efiDir, 0755); err != nil {
 			return fmt.Errorf("mkdir efi dir: %w", err)
 		}
 
-		efiStub := "#!/bin/sh\n# Placeholder EFI stub - replace with real grub-install output\n# Run: grub-install --target=x86_64-efi --root-directory=" + cfg.RootfsDir + "\necho \"This is a placeholder EFI binary. Run grub-install to create the real one.\"\n"
-		efiPath := filepath.Join(efiDir, "BOOTx64.EFI")
-		if err := os.WriteFile(efiPath, []byte(efiStub), 0755); err != nil {
-			return fmt.Errorf("write BOOTx64.EFI: %w", err)
+		// Escrever placeholder apenas se a ESP não foi montada (sem grub-install real)
+		if !efiMounted {
+			efiStub := "#!/bin/sh\n# Placeholder EFI stub - replace with real grub-install output\n# Run: grub-install --target=x86_64-efi --root-directory=" + cfg.RootfsDir + "\necho \"This is a placeholder EFI binary. Run grub-install to create the real one.\"\n"
+			efiPath := filepath.Join(efiDir, "BOOTx64.EFI")
+			if err := os.WriteFile(efiPath, []byte(efiStub), 0755); err != nil {
+				return fmt.Errorf("write BOOTx64.EFI: %w", err)
+			}
 		}
 		fmt.Printf("[grub] UEFI directory structure created at %s\n", efiDir)
 
@@ -65,7 +88,8 @@ menuentry "Agnostikos Linux" {
 				"--target=x86_64-efi",
 				"--root-directory="+cfg.RootfsDir,
 				"--boot-directory="+bootDir,
-				"--efi-directory="+filepath.Join(bootDir, "efi"),
+				"--efi-directory="+efiMountDir,
+				"--bootloader-id=Agnostikos",
 				"--no-nvram",
 			)
 			grubInstCmd.Stdout, grubInstCmd.Stderr = os.Stdout, os.Stderr

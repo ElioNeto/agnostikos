@@ -9,6 +9,8 @@ import (
 
 var (
 	bootstrapTarget        string
+	bootstrapDevice        string
+	bootstrapEFIPartition  string
 	bootstrapKernelVer     string
 	bootstrapBusyboxVer    string
 	bootstrapUEFI          bool
@@ -16,7 +18,6 @@ var (
 	bootstrapSkipBusybox   bool
 	bootstrapSkipInitramfs bool
 	bootstrapSkipGRUB      bool
-	bootstrapDevice        string
 )
 
 var bootstrapCmd = &cobra.Command{
@@ -38,6 +39,8 @@ Flags allow skipping individual steps and enabling UEFI support.`,
 
 		cfg := bootstrap.BootstrapConfig{
 			TargetDir:      target,
+			Device:         bootstrapDevice,
+			EFIPartition:   bootstrapEFIPartition,
 			KernelVersion:  bootstrapKernelVer,
 			BusyboxVersion: bootstrapBusyboxVer,
 			UEFI:           bootstrapUEFI,
@@ -45,7 +48,6 @@ Flags allow skipping individual steps and enabling UEFI support.`,
 			SkipBusybox:    bootstrapSkipBusybox,
 			SkipInitramfs:  bootstrapSkipInitramfs,
 			SkipGRUB:       bootstrapSkipGRUB,
-			Device:         bootstrapDevice,
 		}
 
 		fmt.Printf("Starting bootstrap with config: %+v\n", cfg)
@@ -55,6 +57,8 @@ Flags allow skipping individual steps and enabling UEFI support.`,
 
 func init() {
 	bootstrapCmd.Flags().StringVarP(&bootstrapTarget, "target", "t", "", "Target directory (default: $LFS or /mnt/lfs)")
+	bootstrapCmd.Flags().StringVar(&bootstrapDevice, "device", "", "Disk device for BIOS grub-install (e.g. /dev/sda). Required when --uefi is not set.")
+	bootstrapCmd.Flags().StringVar(&bootstrapEFIPartition, "efi-partition", "", "EFI System Partition to mount before grub-install (e.g. /dev/nvme0n1p1). Required for --uefi on real hardware.")
 	bootstrapCmd.Flags().StringVar(&bootstrapKernelVer, "kernel-version", "6.6", "Linux kernel version (e.g. 6.6)")
 	bootstrapCmd.Flags().StringVar(&bootstrapBusyboxVer, "busybox-version", "1.36.1", "Busybox version (e.g. 1.36.1)")
 	bootstrapCmd.Flags().BoolVar(&bootstrapUEFI, "uefi", false, "Enable UEFI boot support")
@@ -62,6 +66,5 @@ func init() {
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipBusybox, "skip-busybox", false, "Skip busybox compilation")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipInitramfs, "skip-initramfs", false, "Skip initramfs generation")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipGRUB, "skip-grub", false, "Skip GRUB installation")
-	bootstrapCmd.Flags().StringVar(&bootstrapDevice, "device", "", "Disk device for BIOS grub-install (e.g. /dev/sda). Required when --uefi is not set.")
 	rootCmd.AddCommand(bootstrapCmd)
 }
