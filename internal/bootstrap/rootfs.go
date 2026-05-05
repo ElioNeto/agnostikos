@@ -10,7 +10,12 @@ import (
 	"path/filepath"
 )
 
-const DefaultRoot = "/mnt/agnosticOS"
+// BaseDir é o diretório raiz de todo o ambiente AgnosticOS.
+// Tudo relacionado a build, rootfs, sources e ISO fica aqui dentro.
+const BaseDir = "/mnt/data/agnostikOS"
+
+// DefaultRoot é o diretório padrão do RootFS dentro do BaseDir.
+const DefaultRoot = BaseDir + "/rootfs"
 
 // ToolchainPackage descreve um pacote da toolchain
 type ToolchainPackage struct {
@@ -27,7 +32,7 @@ var DefaultToolchain = []ToolchainPackage{
 
 // FHSDirectories é a árvore de diretórios do Filesystem Hierarchy Standard
 // Não inclui 'sources/' nem 'tools/' — esses são artefatos de build,
-// ficam em <target>/../sources, fora do rootfs instalado.
+// ficam em /mnt/data/agnostikOS/sources, separados do rootfs instalado.
 var FHSDirectories = []string{
 	"boot",
 	"dev",
@@ -56,7 +61,7 @@ var FHSDirectories = []string{
 	"var/tmp",
 }
 
-// resolveTarget retorna o target resolvido: arg > env AGNOSTICOS_ROOT > default
+// resolveTarget retorna o target resolvido: arg > env AGNOSTICOS_ROOT > DefaultRoot
 func resolveTarget(target string) string {
 	if target != "" {
 		return target
@@ -67,9 +72,25 @@ func resolveTarget(target string) string {
 	return DefaultRoot
 }
 
-// sourcesDir retorna o diretório de sources fora do rootfs
+// sourcesDir retorna o diretório de sources DENTRO do BaseDir.
+// Independente do rootfsDir passado, sources sempre ficam em /mnt/data/agnostikOS/sources.
 func sourcesDir(rootfsDir string) string {
-	return filepath.Join(filepath.Dir(rootfsDir), "sources")
+	// Garante que sources nunca escapem do BaseDir mesmo que rootfsDir seja customizado.
+	base := BaseDir
+	if v := os.Getenv("AGNOSTICOS_ROOT"); v != "" {
+		base = filepath.Dir(v)
+	}
+	_ = rootfsDir // mantido por compatibilidade de assinatura
+	return filepath.Join(base, "sources")
+}
+
+// tmpDir retorna o diretório temporário de build, sempre dentro do BaseDir.
+func tmpDir() string {
+	base := BaseDir
+	if v := os.Getenv("AGNOSTICOS_ROOT"); v != "" {
+		base = filepath.Dir(v)
+	}
+	return filepath.Join(base, "tmp")
 }
 
 // CreateRootFS monta a árvore FHS no diretório alvo e inicializa o VirtualFS
@@ -103,7 +124,7 @@ func CreateRootFS(target string) error {
 	return mountVirtualFS(target)
 }
 
-// DownloadToolchain baixa os pacotes da toolchain para <rootfs>/../sources
+// DownloadToolchain baixa os pacotes da toolchain para /mnt/data/agnostikOS/sources
 func DownloadToolchain(rootfsDir string) error {
 	rootfsDir = resolveTarget(rootfsDir)
 	src := sourcesDir(rootfsDir)
@@ -183,7 +204,7 @@ func UnmountVirtualFS(target string) error {
 
 // BootstrapConfig contém todos os parâmetros para a construção completa do RootFS
 type BootstrapConfig struct {
-	TargetDir      string // diretório raiz do RootFS (ex: /mnt/agnosticOS)
+	TargetDir      string // diretório raiz do RootFS (ex: /mnt/data/agnostikOS/rootfs)
 	Device         string // disco base para grub-install BIOS (ex: /dev/sda)
 	EFIPartition   string // partição ESP para grub-install UEFI (ex: /dev/nvme0n1p1)
 	KernelVersion  string // versão do kernel Linux (ex: "6.6")

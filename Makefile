@@ -1,15 +1,31 @@
 .PHONY: help build test clean install test-iso test-iso-headless lint fmt deps iso bootstrap
 
 BINARY_NAME=agnostic
-BUILD_DIR=build
+
+# Diretório base — TUDO relacionado ao AgnostikOS fica aqui.
+# Nunca altere para apontar para fora deste caminho.
+AGNOSTICOS_BASE ?= /mnt/data/agnostikOS
+
+# Diretório de build do binário Go (dentro do base)
+BUILD_DIR=$(AGNOSTICOS_BASE)/build
+
+# Diretório do RootFS / LFS (dentro do base)
+LFS ?= $(AGNOSTICOS_BASE)/rootfs
+
+# Variável de ambiente usada pelo binário em runtime para resolver o rootfs
+export AGNOSTICOS_ROOT=$(LFS)
+
 GO=go
-LFS ?= /mnt/lfs
 LDFLAGS=-ldflags "-X github.com/ElioNeto/agnostikos/cmd/agnostic.Version=$(shell git describe --tags --always --dirty 2>/dev/null || echo dev) -X github.com/ElioNeto/agnostikos/cmd/agnostic.Commit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-build: ## Build the CLI binary
+# Garante que o diretório base exista antes de qualquer build
+$(AGNOSTICOS_BASE):
+	@mkdir -p $(AGNOSTICOS_BASE)
+
+build: $(AGNOSTICOS_BASE) ## Build the CLI binary
 	@mkdir -p $(BUILD_DIR)
 	$(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) .
 
@@ -18,7 +34,7 @@ install: build ## Install binary to /usr/local/bin
 	@sudo chmod +x /usr/local/bin/$(BINARY_NAME)
 
 test: ## Run unit tests
-	$(GO) test -v -race -coverprofile=coverage.out ./...
+	$(GO) test -v -race -coverprofile=$(AGNOSTICOS_BASE)/coverage.out ./...
 
 test-iso: ## Test ISO in QEMU
 	@bash scripts/run-qemu.sh $(BUILD_DIR)/agnostikos-latest.iso
@@ -35,14 +51,14 @@ lint: ## Run golangci-lint
 fmt: ## Format Go code
 	$(GO) fmt ./...
 
-clean: ## Clean build artifacts
-	@rm -rf $(BUILD_DIR) coverage.out
+clean: ## Clean build artifacts (remove build/ e tmp/ dentro do base dir)
+	@rm -rf $(BUILD_DIR) $(AGNOSTICOS_BASE)/tmp $(AGNOSTICOS_BASE)/coverage.out
 
 deps: ## Download Go dependencies
 	$(GO) mod download
 	$(GO) mod tidy
 
-iso: build ## Build ISO from RootFS (uses LFS env var or /mnt/lfs)
+iso: build ## Build ISO from RootFS — output vai para $(AGNOSTICOS_BASE)/build/
 	@$(BUILD_DIR)/$(BINARY_NAME) iso build $(LFS) --output $(BUILD_DIR)/agnostikos-latest.iso
 
 bootstrap: build ## Bootstrap RootFS into $(LFS)

@@ -17,13 +17,21 @@ type ISOConfig struct {
 	BootLabel string
 }
 
-// GenerateISO cria uma imagem ISO bootável a partir do RootFS
+// GenerateISO cria uma imagem ISO bootável a partir do RootFS.
+// O diretório de trabalho temporário fica sempre dentro do BaseDir
+// (/mnt/data/agnostikOS/tmp), nunca em /tmp do sistema host.
 func GenerateISO(cfg ISOConfig) error {
 	if cfg.RootFS == "" || cfg.Output == "" {
 		return fmt.Errorf("RootFS and Output are required")
 	}
 
-	workDir, err := os.MkdirTemp("", "agnostikos-iso-*")
+	// Garante que o diretório tmp esteja dentro do BaseDir
+	isoTmpBase := tmpDir()
+	if err := os.MkdirAll(isoTmpBase, 0755); err != nil {
+		return fmt.Errorf("mkdir iso tmp base: %w", err)
+	}
+
+	workDir, err := os.MkdirTemp(isoTmpBase, "iso-*")
 	if err != nil {
 		return fmt.Errorf("create work dir: %w", err)
 	}
@@ -75,7 +83,13 @@ func GenerateISO(cfg ISOConfig) error {
 }
 
 func createinitramfs(output string) error {
-	initDir, err := os.MkdirTemp("", "initramfs-*")
+	// Cria o dir temporário do initramfs também dentro do BaseDir
+	initTmpBase := tmpDir()
+	if err := os.MkdirAll(initTmpBase, 0755); err != nil {
+		return fmt.Errorf("mkdir initramfs tmp base: %w", err)
+	}
+
+	initDir, err := os.MkdirTemp(initTmpBase, "initramfs-*")
 	if err != nil {
 		return fmt.Errorf("create initramfs temp dir: %w", err)
 	}
