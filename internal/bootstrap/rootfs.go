@@ -10,15 +10,15 @@ import (
 	"path/filepath"
 )
 
-const DefaultLFSRoot = "/mnt/lfs"
+const DefaultRoot = "/mnt/agnosticOS"
 
-// ToolchainPackage descreve um pacote da toolchain LFS
+// ToolchainPackage descreve um pacote da toolchain
 type ToolchainPackage struct {
 	Name string
 	URL  string
 }
 
-// DefaultToolchain lista os pacotes base do LFS 12.x
+// DefaultToolchain lista os pacotes base
 var DefaultToolchain = []ToolchainPackage{
 	{"binutils-2.42", "https://sourceware.org/pub/binutils/releases/binutils-2.42.tar.xz"},
 	{"gcc-14.1.0", "https://ftp.gnu.org/gnu/gcc/gcc-14.1.0/gcc-14.1.0.tar.xz"},
@@ -26,35 +26,55 @@ var DefaultToolchain = []ToolchainPackage{
 }
 
 // FHSDirectories é a árvore de diretórios do Filesystem Hierarchy Standard
+// Não inclui 'sources/' nem 'tools/' — esses são artefatos de build,
+// ficam em <target>/../sources, fora do rootfs instalado.
 var FHSDirectories = []string{
-	"bin", "boot", "dev", "etc", "home", "lib", "lib64",
-	"media", "mnt", "opt", "proc", "root", "run", "sbin",
-	"srv", "sys", "tmp",
-	"usr/bin", "usr/lib", "usr/sbin", "usr/include", "usr/share", "usr/local", "usr/src",
-	"var/cache", "var/lib", "var/log", "var/run", "var/tmp",
-	"tools", "sources",
+	"boot",
+	"dev",
+	"etc",
+	"home",
+	"media",
+	"mnt",
+	"opt",
+	"proc",
+	"root",
+	"run",
+	"srv",
+	"sys",
+	"tmp",
+	"usr/bin",
+	"usr/lib",
+	"usr/sbin",
+	"usr/include",
+	"usr/share",
+	"usr/local",
+	"usr/src",
+	"var/cache",
+	"var/lib",
+	"var/log",
+	"var/run",
+	"var/tmp",
 }
 
-// resolveLFSTarget retorna o target resolvido: arg > env LFS > default
-func resolveLFSTarget(target string) string {
+// resolveTarget retorna o target resolvido: arg > env AGNOSTICOS_ROOT > default
+func resolveTarget(target string) string {
 	if target != "" {
 		return target
 	}
-	if lfs := os.Getenv("LFS"); lfs != "" {
-		return lfs
+	if v := os.Getenv("AGNOSTICOS_ROOT"); v != "" {
+		return v
 	}
-	return DefaultLFSRoot
+	return DefaultRoot
+}
+
+// sourcesDir retorna o diretório de sources fora do rootfs
+func sourcesDir(rootfsDir string) string {
+	return filepath.Join(filepath.Dir(rootfsDir), "sources")
 }
 
 // CreateRootFS monta a árvore FHS no diretório alvo e inicializa o VirtualFS
 func CreateRootFS(target string) error {
-	if target == "" {
-		if lfs := os.Getenv("LFS"); lfs != "" {
-			target = lfs
-		} else {
-			target = DefaultLFSRoot
-		}
-	}
+	target = resolveTarget(target)
 	fmt.Printf("[rootfs] Creating RootFS at: %s\n", target)
 
 	for _, dir := range FHSDirectories {
@@ -64,10 +84,11 @@ func CreateRootFS(target string) error {
 		}
 	}
 
+	// Symlinks FHS modernos (usrmerge)
 	symlinks := map[string]string{
+		filepath.Join(target, "bin"):     "usr/bin",
 		filepath.Join(target, "lib"):     "usr/lib",
 		filepath.Join(target, "lib64"):   "usr/lib",
-		filepath.Join(target, "bin"):     "usr/bin",
 		filepath.Join(target, "sbin"):    "usr/sbin",
 		filepath.Join(target, "var/run"): "../run",
 	}
@@ -82,15 +103,15 @@ func CreateRootFS(target string) error {
 	return mountVirtualFS(target)
 }
 
-// DownloadToolchain baixa os pacotes da toolchain LFS para o diretório sources
-func DownloadToolchain(target string) error {
-	target = resolveLFSTarget(target)
-	sourcesDir := filepath.Join(target, "sources")
-	if err := os.MkdirAll(sourcesDir, 0755); err != nil {
+// DownloadToolchain baixa os pacotes da toolchain para <rootfs>/../sources
+func DownloadToolchain(rootfsDir string) error {
+	rootfsDir = resolveTarget(rootfsDir)
+	src := sourcesDir(rootfsDir)
+	if err := os.MkdirAll(src, 0755); err != nil {
 		return fmt.Errorf("mkdir sources: %w", err)
 	}
 	for _, pkg := range DefaultToolchain {
-		dest := filepath.Join(sourcesDir, filepath.Base(pkg.URL))
+		dest := filepath.Join(src, filepath.Base(pkg.URL))
 		if _, err := os.Stat(dest); err == nil {
 			fmt.Printf("[toolchain] already exists: %s\n", pkg.Name)
 			continue
@@ -162,9 +183,9 @@ func UnmountVirtualFS(target string) error {
 
 // BootstrapConfig contém todos os parâmetros para a construção completa do RootFS
 type BootstrapConfig struct {
-	TargetDir      string // diretório raiz do RootFS (ex: /mnt/lfs ou /mnt/data)
+	TargetDir      string // diretório raiz do RootFS (ex: /mnt/agnosticOS)
 	Device         string // disco base para grub-install BIOS (ex: /dev/sda)
-	EFIPartition   string // partição ESP para grub-install UEFI (ex: /dev/nvme0n1p1); se vazio, mount manual
+	EFIPartition   string // partição ESP para grub-install UEFI (ex: /dev/nvme0n1p1)
 	KernelVersion  string // versão do kernel Linux (ex: "6.6")
 	BusyboxVersion string // versão do Busybox (ex: "1.36.1")
 	UEFI           bool   // gerar estrutura UEFI
@@ -177,7 +198,7 @@ type BootstrapConfig struct {
 // BootstrapAll executa o pipeline completo de construção do RootFS
 func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	if cfg.TargetDir == "" {
-		cfg.TargetDir = resolveLFSTarget("")
+		cfg.TargetDir = resolveTarget("")
 	}
 
 	fmt.Printf("[bootstrap] Starting full bootstrap at %s\n", cfg.TargetDir)
@@ -198,7 +219,7 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 		fmt.Println("\n=== Step 3/6: Build Kernel ===")
 		kernelCfg := KernelConfig{
 			Version:    cfg.KernelVersion,
-			SourcesDir: filepath.Join(cfg.TargetDir, "sources"),
+			SourcesDir: sourcesDir(cfg.TargetDir),
 			OutputDir:  filepath.Join(cfg.TargetDir, "boot"),
 			Defconfig:  "x86_64_defconfig",
 		}
@@ -212,8 +233,9 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	if !cfg.SkipBusybox {
 		fmt.Println("\n=== Step 4/6: Build Busybox ===")
 		busyboxCfg := BusyboxConfig{
-			Version:   cfg.BusyboxVersion,
-			TargetDir: cfg.TargetDir,
+			Version:    cfg.BusyboxVersion,
+			TargetDir:  cfg.TargetDir,
+			SourcesDir: sourcesDir(cfg.TargetDir),
 		}
 		if err := BuildBusybox(ctx, busyboxCfg); err != nil {
 			return fmt.Errorf("build busybox: %w", err)

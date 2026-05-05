@@ -22,13 +22,16 @@ var (
 
 var bootstrapCmd = &cobra.Command{
 	Use:   "bootstrap",
-	Short: "Create the LFS root filesystem structure with kernel, busybox, initramfs and GRUB",
+	Short: "Create the AgnosticOS root filesystem, kernel, busybox, initramfs and GRUB",
 	Long: `Build a complete bootable RootFS with:
   - FHS directory structure
   - Linux kernel compilation
-  - Busybox compilation
+  - Busybox compilation (statically linked)
   - Initramfs generation
-  - GRUB bootloader installation
+  - GRUB bootloader installation (BIOS or UEFI)
+
+The target directory defaults to $AGNOSTICOS_ROOT or /mnt/agnosticOS.
+Build artifacts (toolchain sources) are kept outside the rootfs at <target>/../sources.
 
 Flags allow skipping individual steps and enabling UEFI support.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -56,7 +59,7 @@ Flags allow skipping individual steps and enabling UEFI support.`,
 }
 
 func init() {
-	bootstrapCmd.Flags().StringVarP(&bootstrapTarget, "target", "t", "", "Target directory (default: $LFS or /mnt/lfs)")
+	bootstrapCmd.Flags().StringVarP(&bootstrapTarget, "target", "t", "", "Target directory for the rootfs (default: $AGNOSTICOS_ROOT or /mnt/agnosticOS)")
 	bootstrapCmd.Flags().StringVar(&bootstrapDevice, "device", "", "Disk device for BIOS grub-install (e.g. /dev/sda). Required when --uefi is not set.")
 	bootstrapCmd.Flags().StringVar(&bootstrapEFIPartition, "efi-partition", "", "EFI System Partition to mount before grub-install (e.g. /dev/nvme0n1p1). Required for --uefi on real hardware.")
 	bootstrapCmd.Flags().StringVar(&bootstrapKernelVer, "kernel-version", "6.6", "Linux kernel version (e.g. 6.6)")
