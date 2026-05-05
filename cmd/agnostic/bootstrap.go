@@ -8,14 +8,15 @@ import (
 )
 
 var (
-	bootstrapTarget     string
-	bootstrapKernelVer  string
-	bootstrapBusyboxVer string
-	bootstrapUEFI       bool
-	bootstrapSkipKernel bool
-	bootstrapSkipBusybox bool
+	bootstrapTarget        string
+	bootstrapKernelVer     string
+	bootstrapBusyboxVer    string
+	bootstrapUEFI          bool
+	bootstrapSkipKernel    bool
+	bootstrapSkipBusybox   bool
 	bootstrapSkipInitramfs bool
-	bootstrapSkipGRUB   bool
+	bootstrapSkipGRUB      bool
+	bootstrapDevice        string
 )
 
 var bootstrapCmd = &cobra.Command{
@@ -44,6 +45,7 @@ Flags allow skipping individual steps and enabling UEFI support.`,
 			SkipBusybox:    bootstrapSkipBusybox,
 			SkipInitramfs:  bootstrapSkipInitramfs,
 			SkipGRUB:       bootstrapSkipGRUB,
+			Device:         bootstrapDevice,
 		}
 
 		fmt.Printf("Starting bootstrap with config: %+v\n", cfg)
@@ -60,5 +62,6 @@ func init() {
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipBusybox, "skip-busybox", false, "Skip busybox compilation")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipInitramfs, "skip-initramfs", false, "Skip initramfs generation")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipGRUB, "skip-grub", false, "Skip GRUB installation")
+	bootstrapCmd.Flags().StringVar(&bootstrapDevice, "device", "", "Disk device for BIOS grub-install (e.g. /dev/sda). Required when --uefi is not set.")
 	rootCmd.AddCommand(bootstrapCmd)
 }
