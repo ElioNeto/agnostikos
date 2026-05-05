@@ -1,20 +1,73 @@
 package bootstrap
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // GRUBConfig contém os parâmetros de instalação do GRUB
 type GRUBConfig struct {
-	RootfsDir     string // ex: "/mnt/data"
-	Device        string // ex: "/dev/sda" — obrigatório para BIOS (disco base, sem número de partição)
-	UEFI          bool   // true = x86_64-efi, false = i386-pc
-	EFIPartition  string // ex: "/dev/nvme0n1p1" — se definido, monta a ESP antes do grub-install
-	Strict        bool   // true = falha do grub-install retorna erro; false = apenas warn (seguro para testes)
+	RootfsDir    string // ex: "/mnt/data"
+	Device       string // ex: "/dev/sda" — obrigatório para BIOS (disco base, sem número de partição)
+	UEFI         bool   // true = x86_64-efi, false = i386-pc
+	EFIPartition string // ex: "/dev/nvme0n1p1" — se definido, monta a ESP antes do grub-install
+	Strict       bool   // true = falha do grub-install retorna erro; false = apenas warn (seguro para testes)
+}
+
+// findMountPoint retorna o ponto de montagem atual de um dispositivo lendo /proc/mounts.
+// Retorna "" se o dispositivo não estiver montado.
+func findMountPoint(device string) (string, error) {
+	f, err := os.Open("/proc/mounts")
+	if err != nil {
+		return "", fmt.Errorf("open /proc/mounts: %w", err)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) >= 2 && fields[0] == device {
+			return fields[1], nil
+		}
+	}
+	return "", scanner.Err()
+}
+
+// mountESP monta a ESP em efiMountDir.
+// Se o dispositivo já estiver montado em outro lugar, usa bind mount.
+// Retorna true se o mount foi feito (e portanto o caller deve desmontar).
+func mountESP(ctx context.Context, device, efiMountDir string) (bool, error) {
+	existing, err := findMountPoint(device)
+	if err != nil {
+		return false, fmt.Errorf("check existing mounts: %w", err)
+	}
+
+	// Já montada exatamente no destino — não precisa fazer nada
+	if existing == efiMountDir {
+		fmt.Printf("[grub] ESP %s already mounted at %s, reusing\n", device, efiMountDir)
+		return false, nil
+	}
+
+	// Já montada em outro ponto — bind mount
+	if existing != "" {
+		fmt.Printf("[grub] ESP %s already mounted at %s, bind-mounting to %s\n", device, existing, efiMountDir)
+		if out, err := exec.CommandContext(ctx, "mount", "--bind", existing, efiMountDir).CombinedOutput(); err != nil {
+			return false, fmt.Errorf("bind-mount %s -> %s: %s: %w", existing, efiMountDir, strings.TrimSpace(string(out)), err)
+		}
+		return true, nil
+	}
+
+	// Não montada — mount normal
+	fmt.Printf("[grub] mounting ESP %s -> %s\n", device, efiMountDir)
+	if out, err := exec.CommandContext(ctx, "mount", device, efiMountDir).CombinedOutput(); err != nil {
+		return false, fmt.Errorf("mount ESP %s: %s: %w", device, strings.TrimSpace(string(out)), err)
+	}
+	return true, nil
 }
 
 // InstallGRUB configura o GRUB no RootFS (BIOS ou UEFI)
@@ -53,18 +106,19 @@ menuentry "Agnostikos Linux" {
 			return fmt.Errorf("mkdir efi mount dir: %w", err)
 		}
 
-		// Montar a ESP se EFIPartition foi especificado
 		efiMounted := false
 		if cfg.EFIPartition != "" {
-			fmt.Printf("[grub] mounting ESP %s -> %s\n", cfg.EFIPartition, efiMountDir)
-			if out, err := exec.CommandContext(ctx, "mount", cfg.EFIPartition, efiMountDir).CombinedOutput(); err != nil {
-				return fmt.Errorf("mount ESP %s: %s: %w", cfg.EFIPartition, string(out), err)
+			var err error
+			efiMounted, err = mountESP(ctx, cfg.EFIPartition, efiMountDir)
+			if err != nil {
+				return fmt.Errorf("mount ESP: %w", err)
 			}
-			efiMounted = true
-			defer func() {
-				fmt.Printf("[grub] unmounting ESP %s\n", efiMountDir)
-				_ = exec.Command("umount", efiMountDir).Run()
-			}()
+			if efiMounted {
+				defer func() {
+					fmt.Printf("[grub] unmounting ESP %s\n", efiMountDir)
+					_ = exec.Command("umount", efiMountDir).Run()
+				}()
+			}
 		}
 
 		efiDir := filepath.Join(efiMountDir, "EFI", "BOOT")
@@ -72,15 +126,14 @@ menuentry "Agnostikos Linux" {
 			return fmt.Errorf("mkdir efi dir: %w", err)
 		}
 
-		// Escrever placeholder apenas se a ESP não foi montada (sem grub-install real)
-		if !efiMounted {
+		if !efiMounted && cfg.EFIPartition == "" {
 			efiStub := "#!/bin/sh\n# Placeholder EFI stub - replace with real grub-install output\n# Run: grub-install --target=x86_64-efi --root-directory=" + cfg.RootfsDir + "\necho \"This is a placeholder EFI binary. Run grub-install to create the real one.\"\n"
 			efiPath := filepath.Join(efiDir, "BOOTx64.EFI")
 			if err := os.WriteFile(efiPath, []byte(efiStub), 0755); err != nil {
 				return fmt.Errorf("write BOOTx64.EFI: %w", err)
 			}
 		}
-		fmt.Printf("[grub] UEFI directory structure created at %s\n", efiDir)
+		fmt.Printf("[grub] UEFI directory structure ready at %s\n", efiDir)
 
 		if hasGrubInstall() {
 			fmt.Println("[grub] grub-install found, attempting UEFI installation...")
@@ -102,7 +155,6 @@ menuentry "Agnostikos Linux" {
 			fmt.Println("[grub] grub-install not found; BOOTx64.EFI is a placeholder")
 		}
 	} else {
-		// BIOS mode
 		if hasGrubInstall() {
 			fmt.Printf("[grub] grub-install found, attempting BIOS installation on %s...\n", cfg.Device)
 			grubInstCmd := exec.CommandContext(ctx, "grub-install",
