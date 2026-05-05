@@ -254,9 +254,9 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	if !cfg.SkipBusybox {
 		fmt.Println("\n=== Step 4/6: Build Busybox ===")
 		busyboxCfg := BusyboxConfig{
-			Version:    cfg.BusyboxVersion,
-			TargetDir:  cfg.TargetDir,
-			SourcesDir: sourcesDir(cfg.TargetDir),
+			Version:   cfg.BusyboxVersion,
+			TargetDir: cfg.TargetDir,
+			//SourcesDir: sourcesDir(cfg.TargetDir),
 		}
 		if err := BuildBusybox(ctx, busyboxCfg); err != nil {
 			return fmt.Errorf("build busybox: %w", err)
