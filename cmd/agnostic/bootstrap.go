@@ -18,6 +18,7 @@ var (
 	bootstrapSkipBusybox   bool
 	bootstrapSkipInitramfs bool
 	bootstrapSkipGRUB      bool
+	bootstrapForce         bool
 )
 
 var bootstrapCmd = &cobra.Command{
@@ -30,10 +31,11 @@ var bootstrapCmd = &cobra.Command{
   - Initramfs generation
   - GRUB bootloader installation (BIOS or UEFI)
 
-The target directory defaults to $AGNOSTICOS_ROOT or /mnt/agnosticOS.
-Build artifacts (toolchain sources) are kept outside the rootfs at <target>/../sources.
+O target directory defaults to $AGNOSTICOS_ROOT ou /mnt/data/agnostikOS/rootfs.
+Todo o build fica isolado em /mnt/data/agnostikOS — nada toca o sistema host.
 
-Flags allow skipping individual steps and enabling UEFI support.`,
+Cada step é automático: se o artefato já existir, o step é ignorado.
+Use --force para recompilar tudo mesmo que já exista.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target := bootstrapTarget
 		if len(args) > 0 {
@@ -51,6 +53,7 @@ Flags allow skipping individual steps and enabling UEFI support.`,
 			SkipBusybox:    bootstrapSkipBusybox,
 			SkipInitramfs:  bootstrapSkipInitramfs,
 			SkipGRUB:       bootstrapSkipGRUB,
+			Force:          bootstrapForce,
 		}
 
 		fmt.Printf("Starting bootstrap with config: %+v\n", cfg)
@@ -59,7 +62,7 @@ Flags allow skipping individual steps and enabling UEFI support.`,
 }
 
 func init() {
-	bootstrapCmd.Flags().StringVarP(&bootstrapTarget, "target", "t", "", "Target directory for the rootfs (default: $AGNOSTICOS_ROOT or /mnt/agnosticOS)")
+	bootstrapCmd.Flags().StringVarP(&bootstrapTarget, "target", "t", "", "Target directory for the rootfs (default: $AGNOSTICOS_ROOT or /mnt/data/agnostikOS/rootfs)")
 	bootstrapCmd.Flags().StringVar(&bootstrapDevice, "device", "", "Disk device for BIOS grub-install (e.g. /dev/sda). Required when --uefi is not set.")
 	bootstrapCmd.Flags().StringVar(&bootstrapEFIPartition, "efi-partition", "", "EFI System Partition to mount before grub-install (e.g. /dev/nvme0n1p1). Required for --uefi on real hardware.")
 	bootstrapCmd.Flags().StringVar(&bootstrapKernelVer, "kernel-version", "6.6", "Linux kernel version (e.g. 6.6)")
@@ -69,5 +72,6 @@ func init() {
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipBusybox, "skip-busybox", false, "Skip busybox compilation")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipInitramfs, "skip-initramfs", false, "Skip initramfs generation")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipGRUB, "skip-grub", false, "Skip GRUB installation")
+	bootstrapCmd.Flags().BoolVar(&bootstrapForce, "force", false, "Force rebuild of all steps, ignoring cache")
 	rootCmd.AddCommand(bootstrapCmd)
 }
