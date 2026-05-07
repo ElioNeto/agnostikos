@@ -93,7 +93,7 @@ func GenerateISO(cfg ISOConfig) error {
 
 	// Bootloader
 	if cfg.UEFI {
-		if err := setupGRUBUEFI(isoDir, bootDir, cfg); err != nil {
+		if err := setupGRUBUEFI(isoDir, bootDir, workDir, cfg); err != nil {
 			return err
 		}
 	} else {
@@ -102,7 +102,7 @@ func GenerateISO(cfg ISOConfig) error {
 		}
 	}
 
-	return runXorriso(isoDir, cfg)
+	return runXorriso(isoDir, workDir, cfg)
 }
 
 func createinitramfs(output string) error {
@@ -137,15 +137,23 @@ exec switch_root /mnt/root /sbin/init
 	return nil
 }
 
-func setupGRUBUEFI(isoDir, bootDir string, cfg ISOConfig) error {
-	efiDir := filepath.Join(isoDir, "EFI", "BOOT")
-	if err := os.MkdirAll(efiDir, 0755); err != nil {
-		return fmt.Errorf("mkdir efiDir: %w", err)
+// setupGRUBUEFI cria a estrutura UEFI correta:
+//  1. Gera BOOTX64.EFI via grub-mkstandalone com grub.cfg embutido
+//  2. Cria efi.img (imagem FAT) contendo EFI/BOOT/BOOTX64.EFI via mtools
+//     (UEFI El Torito exige imagem FAT, não o binário EFI diretamente)
+func setupGRUBUEFI(isoDir, bootDir, workDir string, cfg ISOConfig) error {
+	// Verifica dependências
+	for _, tool := range []string{"grub-mkstandalone", "mformat", "mcopy"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			return fmt.Errorf("%s not found — install grub-efi-amd64-bin and mtools", tool)
+		}
 	}
+
 	grubDir := filepath.Join(bootDir, "grub")
 	if err := os.MkdirAll(grubDir, 0755); err != nil {
 		return fmt.Errorf("mkdir grubDir: %w", err)
 	}
+
 	// console=ttyS0,115200 garante output serial no QEMU headless
 	grubCfg := fmt.Sprintf(`set timeout=5
 set default=0
@@ -155,17 +163,51 @@ menuentry "%s %s" {
     initrd /boot/initramfs.img
 }
 `, cfg.Name, cfg.Version)
-	if err := os.WriteFile(filepath.Join(grubDir, "grub.cfg"), []byte(grubCfg), 0644); err != nil {
+	grubCfgPath := filepath.Join(grubDir, "grub.cfg")
+	if err := os.WriteFile(grubCfgPath, []byte(grubCfg), 0644); err != nil {
 		return fmt.Errorf("write grub.cfg: %w", err)
 	}
-	if err := exec.Command("grub-mkstandalone",
+
+	// Gera BOOTX64.EFI com grub.cfg embutido
+	efiBin := filepath.Join(workDir, "BOOTX64.EFI")
+	cmd := exec.Command("grub-mkstandalone",
 		"-O", "x86_64-efi",
 		"--fonts=unicode",
-		"-o", filepath.Join(efiDir, "BOOTX64.EFI"),
-		"boot/grub/grub.cfg="+filepath.Join(grubDir, "grub.cfg"),
-	).Run(); err != nil {
+		"-o", efiBin,
+		"boot/grub/grub.cfg="+grubCfgPath,
+	)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("grub-mkstandalone: %w", err)
 	}
+
+	// Cria imagem FAT (efi.img) — UEFI El Torito requer imagem FAT, não EFI direto
+	efiImg := filepath.Join(workDir, "efi.img")
+	// 4MB é suficiente para BOOTX64.EFI (~1-2MB)
+	if err := exec.Command("dd", "if=/dev/zero", "of="+efiImg, "bs=1M", "count=4").Run(); err != nil {
+		return fmt.Errorf("dd efi.img: %w", err)
+	}
+	if err := exec.Command("mformat", "-i", efiImg, "-F", "::").Run(); err != nil {
+		return fmt.Errorf("mformat efi.img: %w", err)
+	}
+	if err := exec.Command("mmd", "-i", efiImg, "::/EFI", "::/EFI/BOOT").Run(); err != nil {
+		return fmt.Errorf("mmd EFI/BOOT: %w", err)
+	}
+	if err := exec.Command("mcopy", "-i", efiImg, efiBin, "::/EFI/BOOT/BOOTX64.EFI").Run(); err != nil {
+		return fmt.Errorf("mcopy BOOTX64.EFI: %w", err)
+	}
+
+	// Copia efi.img para dentro da árvore da ISO (boot/grub/efi.img)
+	efiImgDest := filepath.Join(grubDir, "efi.img")
+	imgData, err := os.ReadFile(efiImg)
+	if err != nil {
+		return fmt.Errorf("read efi.img: %w", err)
+	}
+	if err := os.WriteFile(efiImgDest, imgData, 0644); err != nil {
+		return fmt.Errorf("write efi.img to iso tree: %w", err)
+	}
+
+	fmt.Printf("[iso] EFI image created: %s (%d bytes)\n", efiImgDest, len(imgData))
 	return nil
 }
 
@@ -180,7 +222,6 @@ func setupIsolinux(isoDir string, cfg ISOConfig) error {
 		"/usr/lib/syslinux/bios/isolinux.bin",
 		"/usr/lib/syslinux/isolinux.bin",
 		"/usr/share/syslinux/isolinux.bin",
-		"/usr/lib/ISOLINUX/isolinux.bin",
 	}
 	var isolinuxBin string
 	for _, p := range candidates {
@@ -213,10 +254,17 @@ LABEL agnostic
 	return nil
 }
 
-func runXorriso(isoDir string, cfg ISOConfig) error {
+func runXorriso(isoDir, workDir string, cfg ISOConfig) error {
 	args := []string{"-as", "mkisofs", "-o", cfg.Output, "-V", cfg.BootLabel, "-J", "-R"}
 	if cfg.UEFI {
-		args = append(args, "-eltorito-alt-boot", "-e", "EFI/BOOT/BOOTX64.EFI", "-no-emul-boot")
+		// efi.img é a imagem FAT que o UEFI El Torito requer
+		efiImgISO := "boot/grub/efi.img"
+		args = append(args,
+			"-eltorito-alt-boot",
+			"-e", efiImgISO,
+			"-no-emul-boot",
+			"-isohybrid-gpt-basdat",
+		)
 	} else {
 		args = append(args,
 			"-b", "isolinux/isolinux.bin",
