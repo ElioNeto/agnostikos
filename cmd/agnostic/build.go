@@ -19,6 +19,7 @@ type Recipe struct {
 		KernelVersion string `yaml:"kernel_version"`
 		OutputISO     string `yaml:"output_iso"`
 		UEFI          bool   `yaml:"uefi"`
+		Arch          string `yaml:"arch"`
 	} `yaml:"build"`
 }
 
@@ -55,12 +56,17 @@ Example:
 		if err := bootstrap.CreateRootFS(buildTarget); err != nil {
 			return fmt.Errorf("rootfs: %w", err)
 		}
+		arch := r.Build.Arch
+		if arch == "" {
+			arch = r.Arch // fallback to recipe-level arch
+		}
 		if r.Build.KernelVersion != "" {
 			kCfg := bootstrap.KernelConfig{
 				Version:    r.Build.KernelVersion,
 				SourcesDir: buildTarget + "/sources",
 				OutputDir:  buildTarget + "/boot",
-				Defconfig:  "x86_64_defconfig",
+				Defconfig:  "", // auto-detect from arch
+				Arch:       arch,
 			}
 			if err := bootstrap.BuildKernel(kCfg); err != nil {
 				return fmt.Errorf("kernel: %w", err)

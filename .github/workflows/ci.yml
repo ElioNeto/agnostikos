@@ -62,15 +62,14 @@ jobs:
           version: latest
           args: --timeout=5m ./...
 
-  # test-iso: requires KVM + root + 20min kernel compilation.
-  # Locally: HEADLESS=1 BOOT_TIMEOUT=300 make test-iso-headless
-  #
-  # This job runs only on self-hosted runners with KVM access.
-  # GitHub-hosted runners do not support KVM or long-running builds.
+  # test-iso: compila kernel 6.6 + busybox + initramfs + ISO, depois roda QEMU.
+  # Usa TCG (sem KVM) em GitHub Actions — mais lento porém funcional.
+  # Kernel + busybox compilados do fonte (~25 min total em ubuntu-latest).
+  # Executa apenas manualmente (workflow_dispatch) devido ao tempo de build.
   test-iso:
     if: github.event_name == 'workflow_dispatch'
     needs: [build-and-test, lint]
-    runs-on: [self-hosted, linux, x64, kvm]
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -78,11 +77,11 @@ jobs:
         with:
           go-version: '1.22'
       - name: Install dependencies
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-x86 xorriso grub-pc-bin grub-efi-amd64-bin mtools ovmf
-      - name: Build
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-x86 xorriso grub-pc-bin grub-efi-amd64-bin mtools ovmf wget
+      - name: Build Go binary
         run: make build
-      - name: Bootstrap (skip GRUB for ISO-only build)
-        run: sudo make bootstrap ARGS="--skip-grub"
+      - name: Bootstrap (skip GRUB, skip toolchain)
+        run: sudo make bootstrap ARGS="--skip-grub --skip-toolchain"
       - name: Build ISO
         run: make iso
       - name: Test ISO (headless, TCG)

@@ -13,6 +13,7 @@ var (
 	bootstrapEFIPartition  string
 	bootstrapKernelVer     string
 	bootstrapBusyboxVer    string
+	bootstrapArch          string
 	bootstrapUEFI          bool
 	bootstrapSkipToolchain  bool
 	bootstrapSkipKernel    bool
@@ -49,6 +50,7 @@ Use --force para recompilar tudo mesmo que já exista.`,
 			EFIPartition:   bootstrapEFIPartition,
 			KernelVersion:  bootstrapKernelVer,
 			BusyboxVersion: bootstrapBusyboxVer,
+			Arch:           bootstrapArch,
 			UEFI:           bootstrapUEFI,
 			SkipToolchain:  bootstrapSkipToolchain,
 			SkipKernel:     bootstrapSkipKernel,
@@ -69,6 +71,7 @@ func init() {
 	bootstrapCmd.Flags().StringVar(&bootstrapEFIPartition, "efi-partition", "", "EFI System Partition to mount before grub-install (e.g. /dev/nvme0n1p1). Required for --uefi on real hardware.")
 	bootstrapCmd.Flags().StringVar(&bootstrapKernelVer, "kernel-version", "6.6", "Linux kernel version (e.g. 6.6)")
 	bootstrapCmd.Flags().StringVar(&bootstrapBusyboxVer, "busybox-version", "1.36.1", "Busybox version (e.g. 1.36.1)")
+	bootstrapCmd.Flags().StringVar(&bootstrapArch, "arch", "", "Target architecture (amd64, arm64). Empty = auto-detect from host")
 	bootstrapCmd.Flags().BoolVar(&bootstrapUEFI, "uefi", false, "Enable UEFI boot support")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipToolchain, "skip-toolchain", false, "Skip toolchain compilation (binutils, gcc, glibc)")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipKernel, "skip-kernel", false, "Skip kernel compilation")

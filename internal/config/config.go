@@ -42,7 +42,8 @@ type Config struct {
 	} `yaml:"user"`
 }
 
-// Load reads a YAML file at the given path and unmarshals it into a Config.
+// Load reads a YAML file at the given path, unmarshals it into a Config,
+// and validates all fields. Returns all validation errors if any.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -51,6 +52,9 @@ func Load(path string) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing config file: %w", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		return nil, err
 	}
 	return &cfg, nil
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 )
 
 // BaseDir é o diretório raiz de todo o ambiente AgnosticOS.
@@ -210,6 +211,7 @@ type BootstrapConfig struct {
 	EFIPartition   string // partição ESP para grub-install UEFI (ex: /dev/nvme0n1p1)
 	KernelVersion  string // versão do kernel Linux (ex: "6.6")
 	BusyboxVersion string // versão do Busybox (ex: "1.36.1")
+	Arch           string // target arch: "amd64" ou "arm64" (vazio = auto-detect de runtime.GOARCH)
 	UEFI           bool   // gerar estrutura UEFI
 	SkipToolchain  bool   // pular compilação da toolchain (binutils, gcc, glibc)
 	SkipKernel     bool   // pular compilação do kernel
@@ -219,6 +221,14 @@ type BootstrapConfig struct {
 	Force          bool   // ignorar cache e recompilar tudo
 }
 
+// kernelImageName retorna o nome do arquivo da imagem do kernel de acordo com a arquitetura.
+func kernelImageName(arch, version string) string {
+	if arch == "arm64" {
+		return "Image-" + version
+	}
+	return "vmlinuz-" + version
+}
+
 // BootstrapAll executa o pipeline completo de construção do RootFS
 func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	if cfg.TargetDir == "" {
@@ -226,8 +236,12 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	}
 
 	fmt.Printf("[bootstrap] Starting full bootstrap at %s\n", cfg.TargetDir)
-	fmt.Printf("[bootstrap] Config: kernel=%s busybox=%s uefi=%v force=%v\n",
-		cfg.KernelVersion, cfg.BusyboxVersion, cfg.UEFI, cfg.Force)
+	arch := cfg.Arch
+	if arch == "" {
+		arch = runtime.GOARCH
+	}
+	fmt.Printf("[bootstrap] Config: kernel=%s busybox=%s arch=%s uefi=%v force=%v\n",
+		cfg.KernelVersion, cfg.BusyboxVersion, arch, cfg.UEFI, cfg.Force)
 
 	// Step 1: RootFS — idempotente, MkdirAll é no-op se já existe
 	fmt.Println("\n=== Step 1/9: Create RootFS ===")
@@ -276,7 +290,8 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	}
 
 	// Step 6: Kernel
-	kernelArtifact := filepath.Join(cfg.TargetDir, "boot", "vmlinuz-"+cfg.KernelVersion)
+	kernelImage := kernelImageName(arch, cfg.KernelVersion)
+	kernelArtifact := filepath.Join(cfg.TargetDir, "boot", kernelImage)
 	if !cfg.SkipKernel {
 		if !cfg.Force && artifactExists(kernelArtifact) {
 			fmt.Printf("\n=== Step 6/9: Build Kernel (cached: %s) ===\n", kernelArtifact)
@@ -286,7 +301,8 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 				Version:    cfg.KernelVersion,
 				SourcesDir: sourcesDir(cfg.TargetDir),
 				OutputDir:  filepath.Join(cfg.TargetDir, "boot"),
-				Defconfig:  "x86_64_defconfig",
+				Defconfig:  "", // auto-detect from arch
+				Arch:       arch,
 			}
 			if err := BuildKernel(kernelCfg); err != nil {
 				return fmt.Errorf("build kernel: %w", err)
