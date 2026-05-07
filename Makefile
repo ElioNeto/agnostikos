@@ -31,6 +31,7 @@ help: ## Show this help
 	@echo "    make bootstrap ARGS=\"--skip-grub\""
 	@echo "    make bootstrap ARGS=\"--skip-kernel --skip-busybox --skip-initramfs --skip-grub\""
 	@echo "    make bootstrap ARGS=\"--force\""
+	@echo "    make iso       ARGS=\"--uefi\""
 
 # Garante que o diretório base exista antes de qualquer build
 $(AGNOSTICOS_BASE):
@@ -69,8 +70,11 @@ deps: ## Download Go dependencies
 	$(GO) mod download
 	$(GO) mod tidy
 
-iso: build ## Build ISO from RootFS — output vai para $(AGNOSTICOS_BASE)/build/
-	@$(BUILD_DIR)/$(BINARY_NAME) iso build $(LFS) --output $(BUILD_DIR)/agnostikos-latest.iso $(ARGS)
+iso: build ## Build ISO from RootFS — output vai para $(BUILD_DIR)/agnostikos-latest.iso
+	@$(BUILD_DIR)/$(BINARY_NAME) iso \
+		--rootfs $(LFS) \
+		--output $(BUILD_DIR)/agnostikos-latest.iso \
+		$(ARGS)
 
 bootstrap: build ## Bootstrap RootFS into $(LFS) — use ARGS="--skip-grub" etc.
 	@sudo $(BUILD_DIR)/$(BINARY_NAME) bootstrap $(ARGS)
