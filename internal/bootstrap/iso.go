@@ -181,6 +181,7 @@ func setupIsolinux(isoDir string, cfg ISOConfig) error {
 		"/usr/lib/syslinux/bios/isolinux.bin",
 		"/usr/lib/syslinux/isolinux.bin",
 		"/usr/share/syslinux/isolinux.bin",
+		"/usr/lib/ISOLINUX/isolinux.bin",
 	}
 	var isolinuxBin string
 	for _, p := range candidates {
