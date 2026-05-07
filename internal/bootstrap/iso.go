@@ -42,14 +42,11 @@ func findVmlinuz(rootfs, kernelVersion string) (string, error) {
 }
 
 // GenerateISO cria uma imagem ISO bootável a partir do RootFS.
-// O diretório de trabalho temporário fica sempre dentro do BaseDir
-// (/mnt/data/agnostikOS/tmp), nunca em /tmp do sistema host.
 func GenerateISO(cfg ISOConfig) error {
 	if cfg.RootFS == "" || cfg.Output == "" {
 		return fmt.Errorf("RootFS and Output are required")
 	}
 
-	// Garante que o diretório tmp esteja dentro do BaseDir
 	isoTmpBase := tmpDir()
 	if err := os.MkdirAll(isoTmpBase, 0755); err != nil {
 		return fmt.Errorf("mkdir iso tmp base: %w", err)
@@ -149,11 +146,12 @@ func setupGRUBUEFI(isoDir, bootDir string, cfg ISOConfig) error {
 	if err := os.MkdirAll(grubDir, 0755); err != nil {
 		return fmt.Errorf("mkdir grubDir: %w", err)
 	}
+	// console=ttyS0,115200 garante output serial no QEMU headless
 	grubCfg := fmt.Sprintf(`set timeout=5
 set default=0
 
 menuentry "%s %s" {
-    linux /boot/vmlinuz root=/dev/sda1 quiet
+    linux /boot/vmlinuz root=/dev/sda1 console=ttyS0,115200 quiet
     initrd /boot/initramfs.img
 }
 `, cfg.Name, cfg.Version)
@@ -178,6 +176,7 @@ func setupIsolinux(isoDir string, cfg ISOConfig) error {
 	}
 
 	candidates := []string{
+		"/usr/lib/ISOLINUX/isolinux.bin",
 		"/usr/lib/syslinux/bios/isolinux.bin",
 		"/usr/lib/syslinux/isolinux.bin",
 		"/usr/share/syslinux/isolinux.bin",
@@ -200,11 +199,12 @@ func setupIsolinux(isoDir string, cfg ISOConfig) error {
 		return fmt.Errorf("write isolinux.bin: %w", err)
 	}
 
+	// console=ttyS0,115200 garante output serial no QEMU headless
 	cfgContent := `DEFAULT agnostic
 TIMEOUT 50
 LABEL agnostic
     KERNEL /boot/vmlinuz
-    APPEND initrd=/boot/initramfs.img root=/dev/sda1 quiet
+    APPEND initrd=/boot/initramfs.img root=/dev/sda1 console=ttyS0,115200 quiet
 `
 	if err := os.WriteFile(filepath.Join(dir, "isolinux.cfg"), []byte(cfgContent), 0644); err != nil {
 		return fmt.Errorf("write isolinux.cfg: %w", err)
