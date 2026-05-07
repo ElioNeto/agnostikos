@@ -6,23 +6,23 @@ import (
 	"testing"
 )
 
-func TestResolveLFSTarget_Arg(t *testing.T) {
-	if got := resolveLFSTarget("/custom"); got != "/custom" {
+func TestResolveTarget_Arg(t *testing.T) {
+	if got := resolveTarget("/custom"); got != "/custom" {
 		t.Errorf("expected /custom, got %s", got)
 	}
 }
 
-func TestResolveLFSTarget_EnvVar(t *testing.T) {
-	t.Setenv("LFS", "/from-env")
-	if got := resolveLFSTarget(""); got != "/from-env" {
+func TestResolveTarget_EnvVar(t *testing.T) {
+	t.Setenv("AGNOSTICOS_ROOT", "/from-env")
+	if got := resolveTarget(""); got != "/from-env" {
 		t.Errorf("expected /from-env, got %s", got)
 	}
 }
 
-func TestResolveLFSTarget_Default(t *testing.T) {
-	os.Unsetenv("LFS")
-	if got := resolveLFSTarget(""); got != DefaultLFSRoot {
-		t.Errorf("expected %s, got %s", DefaultLFSRoot, got)
+func TestResolveTarget_Default(t *testing.T) {
+	os.Unsetenv("AGNOSTICOS_ROOT")
+	if got := resolveTarget(""); got != DefaultRoot {
+		t.Errorf("expected %s, got %s", DefaultRoot, got)
 	}
 }
 

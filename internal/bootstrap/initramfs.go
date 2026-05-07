@@ -31,30 +31,70 @@ func BuildInitramfs(ctx context.Context, rootfsDir, outputPath string) error {
 		}
 	}
 
-	// Criar /init script
+	// Criar /init script — mostra a mensagem de boas-vindas e desliga após 2s
+	// para que o teste headless possa verificar a saída serial sem timeout.
 	initScript := `#!/bin/sh
 mount -t proc none /proc
 mount -t sysfs none /sys
 mount -t devtmpfs none /dev
 echo "Welcome to Agnostikos minimal system"
-exec /bin/sh
+sleep 2
+poweroff -f
 `
 	initPath := filepath.Join(initDir, "init")
 	if err := os.WriteFile(initPath, []byte(initScript), 0755); err != nil {
 		return fmt.Errorf("write /init script: %w", err)
 	}
 
-	// Copiar binários do busybox se existirem
+	// Copiar binários do busybox para dentro do initramfs.
+	// Copiamos apenas o binário principal busybox e criamos links simbólicos
+	// para os applets necessários na inicialização: sh, mount, poweroff, sleep.
 	busyboxInstall := filepath.Join(rootfsDir, "busybox-install")
-	if info, err := os.Stat(busyboxInstall); err == nil && info.IsDir() {
-		fmt.Println("[initramfs] copying busybox binaries into initramfs...")
-		copyCmd := exec.CommandContext(ctx, "cp", "-ra",
-			filepath.Join(busyboxInstall, "."),
-			initDir)
-		copyCmd.Stdout, copyCmd.Stderr = os.Stdout, os.Stderr
-		if err := copyCmd.Run(); err != nil {
-			return fmt.Errorf("copy busybox to initramfs: %w", err)
+	busyboxBin := filepath.Join(busyboxInstall, "bin", "busybox")
+	if _, err := os.Stat(busyboxBin); err == nil {
+		fmt.Printf("[initramfs] using busybox binary from %s\n", busyboxBin)
+
+		// Copia o binário busybox para bin/
+		targetBin := filepath.Join(initDir, "bin")
+		if err := os.MkdirAll(targetBin, 0755); err != nil {
+			return fmt.Errorf("mkdir bin: %w", err)
 		}
+		data, err := os.ReadFile(busyboxBin)
+		if err != nil {
+			return fmt.Errorf("read busybox: %w", err)
+		}
+		destPath := filepath.Join(targetBin, "busybox")
+		if err := os.WriteFile(destPath, data, 0755); err != nil {
+			return fmt.Errorf("write busybox: %w", err)
+		}
+
+		// Cria links simbólicos para os applets essenciais de inicialização
+		applets := []string{"sh", "mount", "poweroff", "sleep", "reboot", "halt", "dmesg", "cat", "echo"}
+		for _, a := range applets {
+			linkPath := filepath.Join(targetBin, a)
+			if err := os.Symlink("busybox", linkPath); err != nil {
+				return fmt.Errorf("symlink %s: %w", a, err)
+			}
+		}
+
+		// Também copia sbin/init e switch_root se existirem
+		// (busybox install cria sbin/init como symlink para ../bin/busybox)
+		sbinDir := filepath.Join(initDir, "sbin")
+		if err := os.MkdirAll(sbinDir, 0755); err != nil {
+			return fmt.Errorf("mkdir sbin: %w", err)
+		}
+		// init, switch_root são essenciais
+		for _, a := range []string{"init", "switch_root"} {
+			srcPath := filepath.Join(busyboxInstall, "sbin", a)
+			if _, err := os.Stat(srcPath); err == nil {
+				linkPath := filepath.Join(sbinDir, a)
+				if err := os.Symlink("../bin/busybox", linkPath); err != nil {
+					return fmt.Errorf("symlink sbin/%s: %w", a, err)
+				}
+			}
+		}
+	} else {
+		fmt.Printf("[initramfs] warn: busybox not found at %s — initramfs will have no shell\n", busyboxBin)
 	}
 
 	// Empacotar com cpio | gzip

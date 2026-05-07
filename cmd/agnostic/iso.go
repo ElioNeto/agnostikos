@@ -13,6 +13,7 @@ var (
 	isoVersion       string
 	isoName          string
 	isoKernelVersion string
+	isoInitramfs     string
 	isoUEFI          bool
 )
 
@@ -54,6 +55,7 @@ Examples:
 			KernelVersion: isoKernelVersion, // vazio = auto-detect por glob
 			RootFS:        isoRootFS,
 			Output:        isoOutput,
+			InitramfsPath: isoInitramfs,
 			UEFI:          isoUEFI,
 			BootLabel:     isoName + "-" + isoVersion,
 		}
@@ -73,6 +75,7 @@ func init() {
 	isoCmd.Flags().StringVar(&isoVersion, "version", "0.1.0", "OS version embedded in ISO label")
 	isoCmd.Flags().StringVar(&isoName, "name", "AgnostikOS", "OS name embedded in ISO label")
 	isoCmd.Flags().StringVar(&isoKernelVersion, "kernel-version", "", "Kernel version to use (ex: 6.6). If empty, auto-detects from boot/vmlinuz-*")
+	isoCmd.Flags().StringVar(&isoInitramfs, "initramfs", "", "Custom initramfs path (default: RootFS/boot/initramfs.img)")
 	isoCmd.Flags().BoolVar(&isoUEFI, "uefi", false, "Generate UEFI-bootable ISO")
 	rootCmd.AddCommand(isoCmd)
 }

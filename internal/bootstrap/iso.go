@@ -14,6 +14,7 @@ type ISOConfig struct {
 	KernelVersion string
 	RootFS        string
 	Output        string
+	InitramfsPath string // caminho opcional para initramfs; vazio = RootFS/boot/initramfs.img
 	UEFI          bool
 	BootLabel     string
 }
@@ -71,7 +72,10 @@ func GenerateISO(cfg ISOConfig) error {
 		return fmt.Errorf("write vmlinuz: %w", err)
 	}
 
-	initramfsSrc := filepath.Join(cfg.RootFS, "boot", "initramfs.img")
+	initramfsSrc := cfg.InitramfsPath
+	if initramfsSrc == "" {
+		initramfsSrc = filepath.Join(cfg.RootFS, "boot", "initramfs.img")
+	}
 	if data, err := os.ReadFile(initramfsSrc); err == nil {
 		fmt.Printf("[iso] using real initramfs from %s (%d bytes)\n", initramfsSrc, len(data))
 		if err := os.WriteFile(filepath.Join(bootDir, "initramfs.img"), data, 0644); err != nil {
@@ -84,17 +88,25 @@ func GenerateISO(cfg ISOConfig) error {
 		}
 	}
 
-	if cfg.UEFI {
-		if err := setupGRUBUEFI(isoDir, bootDir, workDir, cfg); err != nil {
-			return err
-		}
-	} else {
-		if err := setupIsolinux(isoDir, cfg); err != nil {
-			return err
-		}
+	// Criar grub.cfg básico que será usado pelo grub-mkrescue
+	grubDir := filepath.Join(bootDir, "grub")
+	if err := os.MkdirAll(grubDir, 0755); err != nil {
+		return fmt.Errorf("mkdir grubDir: %w", err)
+	}
+	grubCfg := fmt.Sprintf(`set timeout=5
+set default=0
+
+menuentry "%s %s" {
+    linux /boot/vmlinuz console=ttyS0,115200 quiet
+    initrd /boot/initramfs.img
+}
+`, cfg.Name, cfg.Version)
+	grubCfgPath := filepath.Join(grubDir, "grub.cfg")
+	if err := os.WriteFile(grubCfgPath, []byte(grubCfg), 0644); err != nil {
+		return fmt.Errorf("write grub.cfg: %w", err)
 	}
 
-	return runXorriso(isoDir, workDir, cfg)
+	return runGrubMkrescue(isoDir, cfg)
 }
 
 func createinitramfs(output string) error {
@@ -129,170 +141,30 @@ exec switch_root /mnt/root /sbin/init
 	return nil
 }
 
-// setupGRUBUEFI cria a estrutura UEFI correta:
-//  1. Gera BOOTX64.EFI via grub-mkstandalone
-//  2. Copia BOOTX64.EFI para EFI/BOOT/ na árvore da ISO (OVMF lê daqui)
-//  3. Cria efi.img (FAT) contendo EFI/BOOT/BOOTX64.EFI para El Torito
-func setupGRUBUEFI(isoDir, bootDir, workDir string, cfg ISOConfig) error {
-	for _, tool := range []string{"grub-mkstandalone", "mformat", "mcopy"} {
-		if _, err := exec.LookPath(tool); err != nil {
-			return fmt.Errorf("%s not found — install grub-efi-amd64-bin and mtools", tool)
-		}
+// runGrubMkrescue cria a ISO usando grub-mkrescue, que gera corretamente
+// uma ISO híbrida com suporte a BIOS e UEFI, incluindo System Area (GPT/MBR)
+// necessária para boot OVMF.
+func runGrubMkrescue(isoDir string, cfg ISOConfig) error {
+	if _, err := exec.LookPath("grub-mkrescue"); err != nil {
+		return fmt.Errorf("grub-mkrescue not found — install grub-common and grub-efi-amd64-bin")
 	}
 
-	grubDir := filepath.Join(bootDir, "grub")
-	if err := os.MkdirAll(grubDir, 0755); err != nil {
-		return fmt.Errorf("mkdir grubDir: %w", err)
+	label := cfg.BootLabel
+	if label == "" {
+		label = "AgnostikOS"
 	}
 
-	grubCfg := fmt.Sprintf(`set timeout=5
-set default=0
-
-menuentry "%s %s" {
-    linux /boot/vmlinuz root=/dev/sda1 console=ttyS0,115200 quiet
-    initrd /boot/initramfs.img
-}
-`, cfg.Name, cfg.Version)
-	grubCfgPath := filepath.Join(grubDir, "grub.cfg")
-	if err := os.WriteFile(grubCfgPath, []byte(grubCfg), 0644); err != nil {
-		return fmt.Errorf("write grub.cfg: %w", err)
+	args := []string{
+		"-o", cfg.Output,
+		"-V", label,
+		isoDir,
 	}
 
-	// Gera BOOTX64.EFI
-	efiBin := filepath.Join(workDir, "BOOTX64.EFI")
-	cmd := exec.Command("grub-mkstandalone",
-		"-O", "x86_64-efi",
-		"--fonts=unicode",
-		"-o", efiBin,
-		"boot/grub/grub.cfg="+grubCfgPath,
-	)
+	fmt.Printf("[iso] running grub-mkrescue to create hybrid ISO: %s\n", cfg.Output)
+	cmd := exec.Command("grub-mkrescue", args...)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("grub-mkstandalone: %w", err)
-	}
-
-	// Copia BOOTX64.EFI para EFI/BOOT/ na árvore da ISO
-	// OVMF procura por EFI/BOOT/BOOTX64.EFI diretamente no filesystem da ISO
-	efiBootDir := filepath.Join(isoDir, "EFI", "BOOT")
-	if err := os.MkdirAll(efiBootDir, 0755); err != nil {
-		return fmt.Errorf("mkdir EFI/BOOT: %w", err)
-	}
-	efiBinData, err := os.ReadFile(efiBin)
-	if err != nil {
-		return fmt.Errorf("read BOOTX64.EFI: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(efiBootDir, "BOOTX64.EFI"), efiBinData, 0644); err != nil {
-		return fmt.Errorf("write EFI/BOOT/BOOTX64.EFI to iso tree: %w", err)
-	}
-	fmt.Printf("[iso] copied BOOTX64.EFI to ISO tree EFI/BOOT/ (%d bytes)\n", len(efiBinData))
-
-	// Dimensiona efi.img dinamicamente (2x tamanho do EFI + 2MB, mínimo 10MB)
-	efiBinInfo, err := os.Stat(efiBin)
-	if err != nil {
-		return fmt.Errorf("stat BOOTX64.EFI: %w", err)
-	}
-	efiSizeMB := (efiBinInfo.Size()/(1024*1024)+1)*2 + 2
-	if efiSizeMB < 10 {
-		efiSizeMB = 10
-	}
-	fmt.Printf("[iso] BOOTX64.EFI: %d bytes — allocating %dMB FAT image\n", efiBinInfo.Size(), efiSizeMB)
-
-	// Cria imagem FAT para El Torito
-	efiImg := filepath.Join(workDir, "efi.img")
-	run := func(name string, args ...string) error {
-		c := exec.Command(name, args...)
-		out, err := c.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("%s %v: %w\noutput: %s", name, args, err, string(out))
-		}
-		return nil
-	}
-	if err := run("dd", "if=/dev/zero", "of="+efiImg, "bs=1M", fmt.Sprintf("count=%d", efiSizeMB)); err != nil {
-		return err
-	}
-	if err := run("mformat", "-i", efiImg, "-F", "::"); err != nil {
-		return err
-	}
-	if err := run("mmd", "-i", efiImg, "::EFI"); err != nil {
-		return err
-	}
-	if err := run("mmd", "-i", efiImg, "::EFI/BOOT"); err != nil {
-		return err
-	}
-	if err := run("mcopy", "-i", efiImg, efiBin, "::EFI/BOOT/BOOTX64.EFI"); err != nil {
-		return err
-	}
-
-	// Copia efi.img para a árvore da ISO
-	efiImgDest := filepath.Join(grubDir, "efi.img")
-	imgData, err := os.ReadFile(efiImg)
-	if err != nil {
-		return fmt.Errorf("read efi.img: %w", err)
-	}
-	if err := os.WriteFile(efiImgDest, imgData, 0644); err != nil {
-		return fmt.Errorf("write efi.img to iso tree: %w", err)
-	}
-	fmt.Printf("[iso] EFI image created: %s (%d bytes)\n", efiImgDest, len(imgData))
-	return nil
-}
-
-func setupIsolinux(isoDir string, cfg ISOConfig) error {
-	dir := filepath.Join(isoDir, "isolinux")
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("mkdir isolinux: %w", err)
-	}
-	candidates := []string{
-		"/usr/lib/ISOLINUX/isolinux.bin",
-		"/usr/lib/syslinux/bios/isolinux.bin",
-		"/usr/lib/syslinux/isolinux.bin",
-		"/usr/share/syslinux/isolinux.bin",
-	}
-	var isolinuxBin string
-	for _, p := range candidates {
-		if _, err := os.Stat(p); err == nil {
-			isolinuxBin = p
-			break
-		}
-	}
-	if isolinuxBin == "" {
-		return fmt.Errorf("isolinux.bin not found — install syslinux")
-	}
-	data, err := os.ReadFile(isolinuxBin)
-	if err != nil {
-		return fmt.Errorf("read isolinux.bin: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "isolinux.bin"), data, 0644); err != nil {
-		return fmt.Errorf("write isolinux.bin: %w", err)
-	}
-	cfgContent := `DEFAULT agnostic
-TIMEOUT 50
-LABEL agnostic
-    KERNEL /boot/vmlinuz
-    APPEND initrd=/boot/initramfs.img root=/dev/sda1 console=ttyS0,115200 quiet
-`
-	if err := os.WriteFile(filepath.Join(dir, "isolinux.cfg"), []byte(cfgContent), 0644); err != nil {
-		return fmt.Errorf("write isolinux.cfg: %w", err)
+		return fmt.Errorf("grub-mkrescue failed: %w", err)
 	}
 	return nil
-}
-
-func runXorriso(isoDir, workDir string, cfg ISOConfig) error {
-	args := []string{"-as", "mkisofs", "-o", cfg.Output, "-V", cfg.BootLabel, "-J", "-R"}
-	if cfg.UEFI {
-		args = append(args,
-			"-eltorito-alt-boot",
-			"-e", "boot/grub/efi.img",
-			"-no-emul-boot",
-			"-isohybrid-gpt-basdat",
-		)
-	} else {
-		args = append(args,
-			"-b", "isolinux/isolinux.bin",
-			"-c", "isolinux/boot.cat",
-			"-no-emul-boot", "-boot-load-size", "4", "-boot-info-table")
-	}
-	args = append(args, isoDir)
-	cmd := exec.Command("xorriso", args...)
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	return cmd.Run()
 }

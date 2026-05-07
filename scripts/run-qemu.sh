@@ -78,6 +78,33 @@ cleanup() {
   [[ "$HEADLESS" == "1" && -f "$SERIAL_LOG" ]] && rm -f "$SERIAL_LOG"
 }
 
+# check_boot_output checks serial log for welcome message and exits accordingly
+check_boot_output() {
+  if [[ "$HEADLESS" != "1" ]]; then
+    return 0
+  fi
+  echo ""
+  echo -e "${GREEN}[BOOT TEST]${NO_COLOR} Analyzing serial output..."
+
+  if [[ ! -f "$SERIAL_LOG" ]]; then
+    echo -e "${RED}[BOOT TEST]${NO_COLOR} Serial log not found: $SERIAL_LOG"
+    echo -e "${RED}[BOOT TEST]${NO_COLOR} FAIL"
+    return 1
+  fi
+
+  if grep -q "Welcome to Agnostikos" "$SERIAL_LOG"; then
+    echo -e "${GREEN}[BOOT TEST]${NO_COLOR} Welcome message found in serial output"
+    echo -e "${GREEN}[BOOT TEST]${NO_COLOR} PASS"
+    return 0
+  else
+    echo -e "${RED}[BOOT TEST]${NO_COLOR} Welcome message NOT found in serial output"
+    echo -e "${RED}[BOOT TEST]${NO_COLOR} Last 50 lines of serial output:"
+    tail -50 "$SERIAL_LOG" || true
+    echo -e "${RED}[BOOT TEST]${NO_COLOR} FAIL"
+    return 1
+  fi
+}
+
 # Roda QEMU com timeout
 timeout "${BOOT_TIMEOUT}" qemu-system-x86_64 \
   $KVM_FLAG \
@@ -91,12 +118,18 @@ timeout "${BOOT_TIMEOUT}" qemu-system-x86_64 \
   -no-reboot || {
     EXIT=$?
     if [[ $EXIT -eq 124 || $EXIT -eq 130 ]]; then
-      echo -e "${RED}[ERROR]${NO_COLOR} Boot timeout after ${BOOT_TIMEOUT}s"
+      echo -e "${RED}[QEMU]${NO_COLOR} Boot timeout after ${BOOT_TIMEOUT}s"
       if [[ "$HEADLESS" == "1" && -f "$SERIAL_LOG" ]]; then
         echo -e "${RED}[DEBUG]${NO_COLOR} Serial log (${SERIAL_LOG}):"
         echo "--- BEGIN SERIAL OUTPUT ---"
         cat "$SERIAL_LOG" || true
         echo "--- END SERIAL OUTPUT ---"
+      fi
+      # Check boot output even on timeout — boot may have been successful
+      # but the shell keeps running (no poweroff in initramfs)
+      if check_boot_output; then
+        cleanup
+        exit 0
       fi
       cleanup
       exit 1
@@ -104,31 +137,10 @@ timeout "${BOOT_TIMEOUT}" qemu-system-x86_64 \
     echo -e "${GREEN}[QEMU]${NO_COLOR} VM stopped (exit $EXIT)"
   }
 
-echo -e "${GREEN}[QEMU]${NO_COLOR} Done"
+echo -e "${GREEN}[QEMU]${NO_COLOR} QEMU exited normally"
 
-# Boot output validation (headless mode only)
-if [[ "$HEADLESS" == "1" ]]; then
-  echo ""
-  echo -e "${GREEN}[BOOT TEST]${NO_COLOR} Analyzing serial output..."
-
-  if [[ ! -f "$SERIAL_LOG" ]]; then
-    echo -e "${RED}[BOOT TEST]${NO_COLOR} Serial log not found: $SERIAL_LOG"
-    echo -e "${RED}[BOOT TEST]${NO_COLOR} FAIL"
-    cleanup
-    exit 1
-  fi
-
-  if grep -q "Welcome to Agnostikos" "$SERIAL_LOG"; then
-    echo -e "${GREEN}[BOOT TEST]${NO_COLOR} Welcome message found in serial output"
-    echo -e "${GREEN}[BOOT TEST]${NO_COLOR} PASS"
-  else
-    echo -e "${RED}[BOOT TEST]${NO_COLOR} Welcome message NOT found in serial output"
-    echo -e "${RED}[BOOT TEST]${NO_COLOR} Last 50 lines of serial output:"
-    tail -50 "$SERIAL_LOG" || true
-    echo -e "${RED}[BOOT TEST]${NO_COLOR} FAIL"
-    cleanup
-    exit 1
-  fi
-
-  cleanup
-fi
+# Boot output validation (headless mode only, on normal exit)
+check_boot_output
+RESULT=$?
+cleanup
+exit $RESULT

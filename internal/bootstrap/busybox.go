@@ -63,18 +63,34 @@ func BuildBusybox(ctx context.Context, cfg BusyboxConfig) error {
 		return fmt.Errorf("busybox defconfig: %w", err)
 	}
 
-	// 3b. Patch .config: disable CONFIG_TC — BusyBox tc.c references CBQ kernel
-	// structs (TCA_CBQ_MAX, struct tc_cbq_lssopt, etc.) removed in Linux 6.1+.
+	// 3b. Patch .config:
+	//   - Disable CONFIG_TC (incompatible with kernel >= 6.1)
+	//   - Enable CONFIG_STATIC for fully static binary (no runtime lib deps)
 	dotConfig := filepath.Join(busyboxDir, ".config")
-	fmt.Println("[busybox] Patching .config: disabling CONFIG_TC (incompatible with kernel >= 6.1)...")
+	fmt.Println("[busybox] Patching .config: disabling CONFIG_TC, enabling CONFIG_STATIC...")
 	patchCmd := exec.CommandContext(ctx, "sed", "-i",
 		"-e", "s/^CONFIG_TC=y/CONFIG_TC=n/",
 		"-e", "s/^CONFIG_FEATURE_TC_INGRESS=y/CONFIG_FEATURE_TC_INGRESS=n/",
+		"-e", "s/^# CONFIG_STATIC is not set/CONFIG_STATIC=y/",
+		"-e", "s/^CONFIG_STATIC=n/CONFIG_STATIC=y/",
 		dotConfig,
 	)
 	patchCmd.Stdout, patchCmd.Stderr = os.Stdout, os.Stderr
 	if err := patchCmd.Run(); err != nil {
 		return fmt.Errorf("busybox patch .config: %w", err)
+	}
+	// If CONFIG_STATIC line didn't exist in .config, add it
+	// (check if the sed already enabled it; if not, append)
+	needsAppend, err := exec.CommandContext(ctx, "sh", "-c",
+		fmt.Sprintf("grep -q '^CONFIG_STATIC=y' %s || echo need_append", dotConfig)).CombinedOutput()
+	if err == nil && string(needsAppend) == "need_append\n" {
+		fmt.Println("[busybox] CONFIG_STATIC not in .config, appending...")
+		appendCmd := exec.CommandContext(ctx, "sh", "-c",
+			fmt.Sprintf("echo 'CONFIG_STATIC=y' >> %s", dotConfig))
+		appendCmd.Stdout, appendCmd.Stderr = os.Stdout, os.Stderr
+		if err := appendCmd.Run(); err != nil {
+			return fmt.Errorf("busybox append CONFIG_STATIC: %w", err)
+		}
 	}
 
 	// 4. Compile
