@@ -5,7 +5,6 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NO_COLOR='\033[0m'
 
-# QEMU availability check
 if ! command -v qemu-system-x86_64 &>/dev/null; then
     echo -e "${RED}[ERROR]${NO_COLOR} qemu-system-x86_64 not found. Install with: apt install qemu-system-x86"
     exit 1
@@ -29,15 +28,42 @@ if [[ -e /dev/kvm ]]; then
     KVM_FLAG="-enable-kvm"
     echo -e "${GREEN}[QEMU]${NO_COLOR} KVM acceleration enabled"
 else
-    KVM_FLAG=""
     echo -e "${GREEN}[INFO]${NO_COLOR} KVM not available — using TCG emulation (slower)"
 fi
 
-# OVMF detection
-OVMF_FLAG=""
-for p in /usr/share/ovmf/OVMF.fd /usr/share/OVMF/OVMF_CODE.fd /usr/share/edk2-ovmf/x64/OVMF_CODE.fd; do
-  [[ -f "$p" ]] && OVMF_FLAG="-bios $p" && echo -e "${GREEN}[QEMU]${NO_COLOR} UEFI firmware: $p" && break
-done
+# UEFI firmware detection
+# Correct method: -drive if=pflash (not -bios which runs CSM/compat mode)
+# Split OVMF (CODE+VARS) is preferred; monolithic OVMF.fd works too via pflash.
+OVMF_FLAGS=""
+VARS_TMP=""
+
+if [[ -f /usr/share/OVMF/OVMF_CODE.fd && -f /usr/share/OVMF/OVMF_VARS.fd ]]; then
+  VARS_TMP="$(mktemp /tmp/OVMF_VARS_XXXXXX.fd)"
+  cp /usr/share/OVMF/OVMF_VARS.fd "$VARS_TMP"
+  OVMF_FLAGS="-drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE.fd \
+-drive if=pflash,format=raw,file=${VARS_TMP}"
+  echo -e "${GREEN}[QEMU]${NO_COLOR} UEFI firmware: OVMF split (CODE+VARS)"
+elif [[ -f /usr/share/ovmf/OVMF.fd ]]; then
+  VARS_TMP="$(mktemp /tmp/OVMF_XXXXXX.fd)"
+  cp /usr/share/ovmf/OVMF.fd "$VARS_TMP"
+  OVMF_FLAGS="-drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/OVMF.fd \
+-drive if=pflash,format=raw,file=${VARS_TMP}"
+  echo -e "${GREEN}[QEMU]${NO_COLOR} UEFI firmware: OVMF monolithic (pflash)"
+elif [[ -f /usr/share/edk2-ovmf/x64/OVMF_CODE.fd ]]; then
+  VARS_TMP="$(mktemp /tmp/OVMF_VARS_XXXXXX.fd)"
+  cp /usr/share/edk2-ovmf/x64/OVMF_VARS.fd "$VARS_TMP"
+  OVMF_FLAGS="-drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2-ovmf/x64/OVMF_CODE.fd \
+-drive if=pflash,format=raw,file=${VARS_TMP}"
+  echo -e "${GREEN}[QEMU]${NO_COLOR} UEFI firmware: edk2 OVMF (pflash)"
+else
+  echo -e "${RED}[WARN]${NO_COLOR} UEFI firmware not found — falling back to legacy BIOS"
+fi
+
+# CD-ROM via AHCI — OVMF enumerates AHCI devices properly for El Torito EFI
+# -cdrom uses IDE legacy which OVMF may not register as a UEFI boot option
+CDROM_FLAGS="-device ahci,id=ahci0 \
+-drive id=cdrom0,if=none,format=raw,readonly=on,file=${ISO} \
+-device ide-cd,bus=ahci0.0,drive=cdrom0"
 
 # Display mode
 if [[ "$HEADLESS" == "1" ]]; then
@@ -47,9 +73,9 @@ else
   DISPLAY_FLAGS="-vga virtio -serial mon:stdio"
 fi
 
-# Cleanup: remover log apenas após validação (não no EXIT)
-cleanup_log() {
-  [[ "$HEADLESS" == "1" ]] && rm -f "$SERIAL_LOG"
+cleanup() {
+  [[ -n "$VARS_TMP" && -f "$VARS_TMP" ]] && rm -f "$VARS_TMP"
+  [[ "$HEADLESS" == "1" && -f "$SERIAL_LOG" ]] && rm -f "$SERIAL_LOG"
 }
 
 # Roda QEMU com timeout
@@ -57,9 +83,8 @@ timeout "${BOOT_TIMEOUT}" qemu-system-x86_64 \
   $KVM_FLAG \
   -m "$RAM" \
   -smp "$CPUS" \
-  $OVMF_FLAG \
-  -cdrom "$ISO" \
-  -boot d \
+  $OVMF_FLAGS \
+  $CDROM_FLAGS \
   $DISPLAY_FLAGS \
   -device virtio-net-pci,netdev=net0 \
   -netdev user,id=net0 \
@@ -73,7 +98,7 @@ timeout "${BOOT_TIMEOUT}" qemu-system-x86_64 \
         cat "$SERIAL_LOG" || true
         echo "--- END SERIAL OUTPUT ---"
       fi
-      cleanup_log
+      cleanup
       exit 1
     fi
     echo -e "${GREEN}[QEMU]${NO_COLOR} VM stopped (exit $EXIT)"
@@ -89,6 +114,7 @@ if [[ "$HEADLESS" == "1" ]]; then
   if [[ ! -f "$SERIAL_LOG" ]]; then
     echo -e "${RED}[BOOT TEST]${NO_COLOR} Serial log not found: $SERIAL_LOG"
     echo -e "${RED}[BOOT TEST]${NO_COLOR} FAIL"
+    cleanup
     exit 1
   fi
 
@@ -98,11 +124,11 @@ if [[ "$HEADLESS" == "1" ]]; then
   else
     echo -e "${RED}[BOOT TEST]${NO_COLOR} Welcome message NOT found in serial output"
     echo -e "${RED}[BOOT TEST]${NO_COLOR} Last 50 lines of serial output:"
-    tail -50 "$SERIAL_LOG"
+    tail -50 "$SERIAL_LOG" || true
     echo -e "${RED}[BOOT TEST]${NO_COLOR} FAIL"
-    cleanup_log
+    cleanup
     exit 1
   fi
 
-  cleanup_log
+  cleanup
 fi
