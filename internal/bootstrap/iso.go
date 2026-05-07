@@ -187,13 +187,16 @@ menuentry "%s %s" {
 	if err := exec.Command("dd", "if=/dev/zero", "of="+efiImg, "bs=1M", "count=4").Run(); err != nil {
 		return fmt.Errorf("dd efi.img: %w", err)
 	}
-	if err := exec.Command("mformat", "-i", efiImg, "-F", "::").Run(); err != nil {
+	if err := exec.Command("mformat", "-i", efiImg, "-F").Run(); err != nil {
 		return fmt.Errorf("mformat efi.img: %w", err)
 	}
-	if err := exec.Command("mmd", "-i", efiImg, "::/EFI", "::/EFI/BOOT").Run(); err != nil {
+	if err := exec.Command("mmd", "-i", efiImg, "EFI").Run(); err != nil {
 		return fmt.Errorf("mmd EFI/BOOT: %w", err)
 	}
-	if err := exec.Command("mcopy", "-i", efiImg, efiBin, "::/EFI/BOOT/BOOTX64.EFI").Run(); err != nil {
+	if err := exec.Command("mmd", "-i", efiImg, "EFI/BOOT").Run(); err != nil {
+		return fmt.Errorf("mmd EFI/BOOT: %w", err)
+	}
+	if err := exec.Command("mcopy", "-i", efiImg, efiBin, "EFI/BOOT/BOOTX64.EFI").Run(); err != nil {
 		return fmt.Errorf("mcopy BOOTX64.EFI: %w", err)
 	}
 
