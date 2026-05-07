@@ -10,17 +10,14 @@ import (
 // ISOConfig contém os parâmetros de geração da ISO
 type ISOConfig struct {
 	Name          string
-	Version       string // versão do OS (label da ISO)
-	KernelVersion string // versão do kernel (ex: "6.6") — usada para localizar vmlinuz-<KernelVersion>
+	Version       string
+	KernelVersion string
 	RootFS        string
 	Output        string
 	UEFI          bool
 	BootLabel     string
 }
 
-// findVmlinuz localiza o vmlinuz dentro de rootfs/boot/.
-// Se kernelVersion for informado, usa vmlinuz-<kernelVersion>.
-// Caso contrário, faz glob em boot/vmlinuz-* e retorna o primeiro encontrado.
 func findVmlinuz(rootfs, kernelVersion string) (string, error) {
 	bootDir := filepath.Join(rootfs, "boot")
 	if kernelVersion != "" {
@@ -41,7 +38,6 @@ func findVmlinuz(rootfs, kernelVersion string) (string, error) {
 	return matches[0], nil
 }
 
-// GenerateISO cria uma imagem ISO bootável a partir do RootFS.
 func GenerateISO(cfg ISOConfig) error {
 	if cfg.RootFS == "" || cfg.Output == "" {
 		return fmt.Errorf("RootFS and Output are required")
@@ -51,7 +47,6 @@ func GenerateISO(cfg ISOConfig) error {
 	if err := os.MkdirAll(isoTmpBase, 0755); err != nil {
 		return fmt.Errorf("mkdir iso tmp base: %w", err)
 	}
-
 	workDir, err := os.MkdirTemp(isoTmpBase, "iso-*")
 	if err != nil {
 		return fmt.Errorf("create work dir: %w", err)
@@ -64,7 +59,6 @@ func GenerateISO(cfg ISOConfig) error {
 		return fmt.Errorf("mkdir bootDir: %w", err)
 	}
 
-	// Localiza vmlinuz (por versão ou glob)
 	kernelSrc, err := findVmlinuz(cfg.RootFS, cfg.KernelVersion)
 	if err != nil {
 		return err
@@ -77,7 +71,6 @@ func GenerateISO(cfg ISOConfig) error {
 		return fmt.Errorf("write vmlinuz: %w", err)
 	}
 
-	// Copia initramfs real ou cria stub
 	initramfsSrc := filepath.Join(cfg.RootFS, "boot", "initramfs.img")
 	if data, err := os.ReadFile(initramfsSrc); err == nil {
 		fmt.Printf("[iso] using real initramfs from %s (%d bytes)\n", initramfsSrc, len(data))
@@ -91,7 +84,6 @@ func GenerateISO(cfg ISOConfig) error {
 		}
 	}
 
-	// Bootloader
 	if cfg.UEFI {
 		if err := setupGRUBUEFI(isoDir, bootDir, workDir, cfg); err != nil {
 			return err
@@ -138,9 +130,9 @@ exec switch_root /mnt/root /sbin/init
 }
 
 // setupGRUBUEFI cria a estrutura UEFI correta:
-//  1. Gera BOOTX64.EFI via grub-mkstandalone com grub.cfg embutido
-//  2. Cria efi.img (imagem FAT de 20MB) contendo EFI/BOOT/BOOTX64.EFI
-//     grub-mkstandalone com --fonts=unicode gera ~3-4MB; 20MB dá folga segura
+//  1. Gera BOOTX64.EFI via grub-mkstandalone
+//  2. Copia BOOTX64.EFI para EFI/BOOT/ na árvore da ISO (OVMF lê daqui)
+//  3. Cria efi.img (FAT) contendo EFI/BOOT/BOOTX64.EFI para El Torito
 func setupGRUBUEFI(isoDir, bootDir, workDir string, cfg ISOConfig) error {
 	for _, tool := range []string{"grub-mkstandalone", "mformat", "mcopy"} {
 		if _, err := exec.LookPath(tool); err != nil {
@@ -153,7 +145,6 @@ func setupGRUBUEFI(isoDir, bootDir, workDir string, cfg ISOConfig) error {
 		return fmt.Errorf("mkdir grubDir: %w", err)
 	}
 
-	// console=ttyS0,115200 garante output serial no QEMU headless
 	grubCfg := fmt.Sprintf(`set timeout=5
 set default=0
 
@@ -167,7 +158,7 @@ menuentry "%s %s" {
 		return fmt.Errorf("write grub.cfg: %w", err)
 	}
 
-	// Gera BOOTX64.EFI com grub.cfg embutido
+	// Gera BOOTX64.EFI
 	efiBin := filepath.Join(workDir, "BOOTX64.EFI")
 	cmd := exec.Command("grub-mkstandalone",
 		"-O", "x86_64-efi",
@@ -180,18 +171,33 @@ menuentry "%s %s" {
 		return fmt.Errorf("grub-mkstandalone: %w", err)
 	}
 
-	// Verifica tamanho real do EFI e dimensiona a imagem FAT com folga (2x + 2MB)
+	// Copia BOOTX64.EFI para EFI/BOOT/ na árvore da ISO
+	// OVMF procura por EFI/BOOT/BOOTX64.EFI diretamente no filesystem da ISO
+	efiBootDir := filepath.Join(isoDir, "EFI", "BOOT")
+	if err := os.MkdirAll(efiBootDir, 0755); err != nil {
+		return fmt.Errorf("mkdir EFI/BOOT: %w", err)
+	}
+	efiBinData, err := os.ReadFile(efiBin)
+	if err != nil {
+		return fmt.Errorf("read BOOTX64.EFI: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(efiBootDir, "BOOTX64.EFI"), efiBinData, 0644); err != nil {
+		return fmt.Errorf("write EFI/BOOT/BOOTX64.EFI to iso tree: %w", err)
+	}
+	fmt.Printf("[iso] copied BOOTX64.EFI to ISO tree EFI/BOOT/ (%d bytes)\n", len(efiBinData))
+
+	// Dimensiona efi.img dinamicamente (2x tamanho do EFI + 2MB, mínimo 10MB)
 	efiBinInfo, err := os.Stat(efiBin)
 	if err != nil {
 		return fmt.Errorf("stat BOOTX64.EFI: %w", err)
 	}
-	efiSizeMB := (efiBinInfo.Size()/(1024*1024) + 1) * 2 + 2
+	efiSizeMB := (efiBinInfo.Size()/(1024*1024)+1)*2 + 2
 	if efiSizeMB < 10 {
 		efiSizeMB = 10
 	}
-	fmt.Printf("[iso] BOOTX64.EFI size: %d bytes — allocating %dMB FAT image\n", efiBinInfo.Size(), efiSizeMB)
+	fmt.Printf("[iso] BOOTX64.EFI: %d bytes — allocating %dMB FAT image\n", efiBinInfo.Size(), efiSizeMB)
 
-	// Cria imagem FAT — mtools requer sintaxe ::path com -i
+	// Cria imagem FAT para El Torito
 	efiImg := filepath.Join(workDir, "efi.img")
 	run := func(name string, args ...string) error {
 		c := exec.Command(name, args...)
@@ -201,7 +207,6 @@ menuentry "%s %s" {
 		}
 		return nil
 	}
-
 	if err := run("dd", "if=/dev/zero", "of="+efiImg, "bs=1M", fmt.Sprintf("count=%d", efiSizeMB)); err != nil {
 		return err
 	}
@@ -227,7 +232,6 @@ menuentry "%s %s" {
 	if err := os.WriteFile(efiImgDest, imgData, 0644); err != nil {
 		return fmt.Errorf("write efi.img to iso tree: %w", err)
 	}
-
 	fmt.Printf("[iso] EFI image created: %s (%d bytes)\n", efiImgDest, len(imgData))
 	return nil
 }
