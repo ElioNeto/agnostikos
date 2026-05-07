@@ -15,11 +15,22 @@ LFS ?= $(AGNOSTICOS_BASE)/rootfs
 # Variável de ambiente usada pelo binário em runtime para resolver o rootfs
 export AGNOSTICOS_ROOT=$(LFS)
 
+# Flags extras repassadas ao binário. Exemplos:
+#   make bootstrap ARGS="--skip-grub"
+#   make bootstrap ARGS="--skip-kernel --skip-busybox --skip-initramfs --skip-grub"
+#   make bootstrap ARGS="--force"
+ARGS ?=
+
 GO=go
 LDFLAGS=-ldflags "-X github.com/ElioNeto/agnostikos/cmd/agnostic.Version=$(shell git describe --tags --always --dirty 2>/dev/null || echo dev) -X github.com/ElioNeto/agnostikos/cmd/agnostic.Commit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@echo ""
+	@echo "  Use ARGS=\"...\" to pass extra flags to bootstrap/iso:"
+	@echo "    make bootstrap ARGS=\"--skip-grub\""
+	@echo "    make bootstrap ARGS=\"--skip-kernel --skip-busybox --skip-initramfs --skip-grub\""
+	@echo "    make bootstrap ARGS=\"--force\""
 
 # Garante que o diretório base exista antes de qualquer build
 $(AGNOSTICOS_BASE):
@@ -59,10 +70,10 @@ deps: ## Download Go dependencies
 	$(GO) mod tidy
 
 iso: build ## Build ISO from RootFS — output vai para $(AGNOSTICOS_BASE)/build/
-	@$(BUILD_DIR)/$(BINARY_NAME) iso build $(LFS) --output $(BUILD_DIR)/agnostikos-latest.iso
+	@$(BUILD_DIR)/$(BINARY_NAME) iso build $(LFS) --output $(BUILD_DIR)/agnostikos-latest.iso $(ARGS)
 
-bootstrap: build ## Bootstrap RootFS into $(LFS)
-	@sudo $(BUILD_DIR)/$(BINARY_NAME) bootstrap $(LFS)
+bootstrap: build ## Bootstrap RootFS into $(LFS) — use ARGS="--skip-grub" etc.
+	@sudo $(BUILD_DIR)/$(BINARY_NAME) bootstrap $(ARGS)
 
 dev: ## Run in development mode
 	@$(GO) run . --help
