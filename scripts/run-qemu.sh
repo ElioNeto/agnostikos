@@ -76,11 +76,13 @@ if [[ "$HEADLESS" == "1" ]]; then
   DISPLAY_FLAGS="-display none -serial file:${SERIAL_LOG}"
   echo -e "${GREEN}[QEMU]${NO_COLOR} Running headless (CI mode) - serial log: $SERIAL_LOG"
 else
-  # Interactive mode: -nographic mostra tudo no terminal (sem janela gráfica).
+  # Interactive mode: serial no terminal, sem janela gráfica.
   # O usuário vê as mensagens de boot e o shell do sistema, podendo digitar
-  # comandos diretamente. Ctrl+A X ou 'exit' no shell encerra a VM.
-  DISPLAY_FLAGS="-nographic"
-  echo -e "${GREEN}[QEMU]${NO_COLOR} Running interactively (nographic) - type Ctrl+A X to exit"
+  # comandos diretamente. 'exit' no shell encerra a VM.
+  # Usar -serial stdio (não -nographic) para evitar problemas de terminal raw.
+  # Ctrl+C no terminal mata o QEMU se necessário.
+  DISPLAY_FLAGS="-display none -serial stdio"
+  echo -e "${GREEN}[QEMU]${NO_COLOR} Running interactively (serial via stdio) - type 'exit' in guest to power off"
 fi
 
 cleanup() {
@@ -116,42 +118,59 @@ check_boot_output() {
   fi
 }
 
-# Roda QEMU com timeout
-timeout "${BOOT_TIMEOUT}" qemu-system-x86_64 \
-  $KVM_FLAG \
-  -m "$RAM" \
-  -smp "$CPUS" \
-  $OVMF_FLAGS \
-  $CDROM_FLAGS \
-  $DISPLAY_FLAGS \
-  -device virtio-net-pci,netdev=net0 \
-  -netdev user,id=net0 \
-  -no-reboot || {
-    EXIT=$?
-    if [[ $EXIT -eq 124 || $EXIT -eq 130 ]]; then
-      echo -e "${RED}[QEMU]${NO_COLOR} Boot timeout after ${BOOT_TIMEOUT}s"
-      if [[ "$HEADLESS" == "1" && -f "$SERIAL_LOG" ]]; then
-        echo -e "${RED}[DEBUG]${NO_COLOR} Serial log (${SERIAL_LOG}):"
-        echo "--- BEGIN SERIAL OUTPUT ---"
-        cat "$SERIAL_LOG" || true
-        echo "--- END SERIAL OUTPUT ---"
-      fi
-      # Check boot output even on timeout — boot may have been successful
-      # but the shell keeps running (no poweroff in initramfs)
-      if check_boot_output; then
+# Roda QEMU
+if [[ "$HEADLESS" == "1" ]]; then
+  # Headless: timeout + serial log capture + boot validation
+  timeout "${BOOT_TIMEOUT}" qemu-system-x86_64 \
+    $KVM_FLAG \
+    -m "$RAM" \
+    -smp "$CPUS" \
+    $OVMF_FLAGS \
+    $CDROM_FLAGS \
+    $DISPLAY_FLAGS \
+    -device virtio-net-pci,netdev=net0 \
+    -netdev user,id=net0 \
+    -no-reboot || {
+      EXIT=$?
+      if [[ $EXIT -eq 124 || $EXIT -eq 130 ]]; then
+        echo -e "${RED}[QEMU]${NO_COLOR} Boot timeout after ${BOOT_TIMEOUT}s"
+        if [[ -f "$SERIAL_LOG" ]]; then
+          echo -e "${RED}[DEBUG]${NO_COLOR} Serial log (${SERIAL_LOG}):"
+          echo "--- BEGIN SERIAL OUTPUT ---"
+          cat "$SERIAL_LOG" || true
+          echo "--- END SERIAL OUTPUT ---"
+        fi
+        # Check boot output even on timeout — boot may have been successful
+        # but the shell keeps running (no poweroff in initramfs)
+        if check_boot_output; then
+          cleanup
+          exit 0
+        fi
         cleanup
-        exit 0
+        exit 1
       fi
-      cleanup
-      exit 1
-    fi
-    echo -e "${GREEN}[QEMU]${NO_COLOR} VM stopped (exit $EXIT)"
-  }
+      echo -e "${GREEN}[QEMU]${NO_COLOR} VM stopped (exit $EXIT)"
+    }
 
-echo -e "${GREEN}[QEMU]${NO_COLOR} QEMU exited normally"
+  echo -e "${GREEN}[QEMU]${NO_COLOR} QEMU exited normally"
 
-# Boot output validation (headless mode only, on normal exit)
-check_boot_output
-RESULT=$?
-cleanup
-exit $RESULT
+  # Boot output validation (headless mode, on normal exit)
+  check_boot_output && RESULT=0 || RESULT=$?
+  cleanup
+  exit $RESULT
+else
+  # Interactive: no timeout, user controls exit via 'exit' or Ctrl+A X
+  # Padrão &&/|| para capturar exit code sem disparar set -e
+  qemu-system-x86_64 \
+    $KVM_FLAG \
+    -m "$RAM" \
+    -smp "$CPUS" \
+    $OVMF_FLAGS \
+    $CDROM_FLAGS \
+    $DISPLAY_FLAGS \
+    -device virtio-net-pci,netdev=net0 \
+    -netdev user,id=net0 \
+    -no-reboot && QEMU_EXIT=0 || QEMU_EXIT=$?
+  cleanup
+  exit $QEMU_EXIT
+fi
