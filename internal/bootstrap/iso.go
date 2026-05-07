@@ -9,12 +9,36 @@ import (
 
 // ISOConfig contém os parâmetros de geração da ISO
 type ISOConfig struct {
-	Name      string
-	Version   string
-	RootFS    string
-	Output    string
-	UEFI      bool
-	BootLabel string
+	Name          string
+	Version       string // versão do OS (label da ISO)
+	KernelVersion string // versão do kernel (ex: "6.6") — usada para localizar vmlinuz-<KernelVersion>
+	RootFS        string
+	Output        string
+	UEFI          bool
+	BootLabel     string
+}
+
+// findVmlinuz localiza o vmlinuz dentro de rootfs/boot/.
+// Se kernelVersion for informado, usa vmlinuz-<kernelVersion>.
+// Caso contrário, faz glob em boot/vmlinuz-* e retorna o primeiro encontrado.
+func findVmlinuz(rootfs, kernelVersion string) (string, error) {
+	bootDir := filepath.Join(rootfs, "boot")
+	if kernelVersion != "" {
+		p := filepath.Join(bootDir, "vmlinuz-"+kernelVersion)
+		if _, err := os.Stat(p); err != nil {
+			return "", fmt.Errorf("kernel not found at %s: %w", p, err)
+		}
+		return p, nil
+	}
+	matches, err := filepath.Glob(filepath.Join(bootDir, "vmlinuz-*"))
+	if err != nil {
+		return "", fmt.Errorf("glob vmlinuz: %w", err)
+	}
+	if len(matches) == 0 {
+		return "", fmt.Errorf("no vmlinuz-* found in %s — run 'make bootstrap' first", bootDir)
+	}
+	fmt.Printf("[iso] using kernel: %s\n", matches[0])
+	return matches[0], nil
 }
 
 // GenerateISO cria uma imagem ISO bootável a partir do RootFS.
@@ -43,17 +67,20 @@ func GenerateISO(cfg ISOConfig) error {
 		return fmt.Errorf("mkdir bootDir: %w", err)
 	}
 
-	// Copy kernel
-	kernelSrc := filepath.Join(cfg.RootFS, "boot", "vmlinuz-"+cfg.Version)
+	// Localiza vmlinuz (por versão ou glob)
+	kernelSrc, err := findVmlinuz(cfg.RootFS, cfg.KernelVersion)
+	if err != nil {
+		return err
+	}
 	data, err := os.ReadFile(kernelSrc)
 	if err != nil {
-		return fmt.Errorf("kernel not found at %s: %w", kernelSrc, err)
+		return fmt.Errorf("read kernel: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(bootDir, "vmlinuz"), data, 0644); err != nil {
 		return fmt.Errorf("write vmlinuz: %w", err)
 	}
 
-	// Copy real initramfs from rootfs build, or create stub if missing
+	// Copia initramfs real ou cria stub
 	initramfsSrc := filepath.Join(cfg.RootFS, "boot", "initramfs.img")
 	if data, err := os.ReadFile(initramfsSrc); err == nil {
 		fmt.Printf("[iso] using real initramfs from %s (%d bytes)\n", initramfsSrc, len(data))
@@ -67,7 +94,7 @@ func GenerateISO(cfg ISOConfig) error {
 		}
 	}
 
-	// Bootloader setup
+	// Bootloader
 	if cfg.UEFI {
 		if err := setupGRUBUEFI(isoDir, bootDir, cfg); err != nil {
 			return err
@@ -78,17 +105,14 @@ func GenerateISO(cfg ISOConfig) error {
 		}
 	}
 
-	// Generate ISO with xorriso
 	return runXorriso(isoDir, cfg)
 }
 
 func createinitramfs(output string) error {
-	// Cria o dir temporário do initramfs também dentro do BaseDir
 	initTmpBase := tmpDir()
 	if err := os.MkdirAll(initTmpBase, 0755); err != nil {
 		return fmt.Errorf("mkdir initramfs tmp base: %w", err)
 	}
-
 	initDir, err := os.MkdirTemp(initTmpBase, "initramfs-*")
 	if err != nil {
 		return fmt.Errorf("create initramfs temp dir: %w", err)
@@ -153,13 +177,12 @@ func setupIsolinux(isoDir string, cfg ISOConfig) error {
 		return fmt.Errorf("mkdir isolinux: %w", err)
 	}
 
-	// Copiar isolinux.bin do host
-	isolinuxBin := ""
 	candidates := []string{
 		"/usr/lib/syslinux/bios/isolinux.bin",
 		"/usr/lib/syslinux/isolinux.bin",
 		"/usr/share/syslinux/isolinux.bin",
 	}
+	var isolinuxBin string
 	for _, p := range candidates {
 		if _, err := os.Stat(p); err == nil {
 			isolinuxBin = p

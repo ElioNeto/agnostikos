@@ -8,11 +8,12 @@ import (
 )
 
 var (
-	isoRootFS  string
-	isoOutput  string
-	isoVersion string
-	isoName    string
-	isoUEFI    bool
+	isoRootFS        string
+	isoOutput        string
+	isoVersion       string
+	isoName          string
+	isoKernelVersion string
+	isoUEFI          bool
 )
 
 var isoCmd = &cobra.Command{
@@ -20,18 +21,20 @@ var isoCmd = &cobra.Command{
 	Short: "Generate a bootable ISO from the RootFS",
 	Long: `Generate a bootable ISO image from an existing RootFS.
 
-The RootFS must already contain boot/vmlinuz-<version> and boot/initramfs.img.
+The RootFS must already contain boot/vmlinuz-<kernel-version> and boot/initramfs.img.
 Run 'agnostic bootstrap' first to build those artifacts.
+
+Se --kernel-version não for informado, o comando localiza automaticamente
+o primeiro vmlinuz-* encontrado em boot/.
 
 Examples:
   agnostic iso
+  agnostic iso --kernel-version 6.6
   agnostic iso --rootfs /mnt/data/agnostikOS/rootfs --output /mnt/data/agnostikOS/build/agnostikos.iso
   agnostic iso --uefi`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if isoRootFS == "" {
-			if v := bootstrap.DefaultRoot; v != "" {
-				isoRootFS = v
-			}
+			isoRootFS = bootstrap.DefaultRoot
 		}
 		if isoOutput == "" {
 			isoOutput = bootstrap.BaseDir + "/build/agnostikos-latest.iso"
@@ -46,12 +49,13 @@ Examples:
 		fmt.Printf("Building ISO from %s -> %s\n", isoRootFS, isoOutput)
 
 		cfg := bootstrap.ISOConfig{
-			Name:      isoName,
-			Version:   isoVersion,
-			RootFS:    isoRootFS,
-			Output:    isoOutput,
-			UEFI:      isoUEFI,
-			BootLabel: isoName + "-" + isoVersion,
+			Name:          isoName,
+			Version:       isoVersion,
+			KernelVersion: isoKernelVersion, // vazio = auto-detect por glob
+			RootFS:        isoRootFS,
+			Output:        isoOutput,
+			UEFI:          isoUEFI,
+			BootLabel:     isoName + "-" + isoVersion,
 		}
 
 		if err := bootstrap.GenerateISO(cfg); err != nil {
@@ -68,6 +72,7 @@ func init() {
 	isoCmd.Flags().StringVarP(&isoOutput, "output", "o", "", "Output ISO path (default: /mnt/data/agnostikOS/build/agnostikos-latest.iso)")
 	isoCmd.Flags().StringVar(&isoVersion, "version", "0.1.0", "OS version embedded in ISO label")
 	isoCmd.Flags().StringVar(&isoName, "name", "AgnostikOS", "OS name embedded in ISO label")
+	isoCmd.Flags().StringVar(&isoKernelVersion, "kernel-version", "", "Kernel version to use (ex: 6.6). If empty, auto-detects from boot/vmlinuz-*")
 	isoCmd.Flags().BoolVar(&isoUEFI, "uefi", false, "Generate UEFI-bootable ISO")
 	rootCmd.AddCommand(isoCmd)
 }
