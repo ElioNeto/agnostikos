@@ -6,6 +6,7 @@ type PackageService interface {
 	Remove(pkgName string) error
 	Update() error
 	Search(query string) ([]string, error)
+	List() ([]string, error) // lista pacotes instalados
 }
 
 // AgnosticManager coordena os múltiplos backends

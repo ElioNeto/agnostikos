@@ -14,6 +14,7 @@ var (
 	bootstrapKernelVer     string
 	bootstrapBusyboxVer    string
 	bootstrapUEFI          bool
+	bootstrapSkipToolchain  bool
 	bootstrapSkipKernel    bool
 	bootstrapSkipBusybox   bool
 	bootstrapSkipInitramfs bool
@@ -49,6 +50,7 @@ Use --force para recompilar tudo mesmo que já exista.`,
 			KernelVersion:  bootstrapKernelVer,
 			BusyboxVersion: bootstrapBusyboxVer,
 			UEFI:           bootstrapUEFI,
+			SkipToolchain:  bootstrapSkipToolchain,
 			SkipKernel:     bootstrapSkipKernel,
 			SkipBusybox:    bootstrapSkipBusybox,
 			SkipInitramfs:  bootstrapSkipInitramfs,
@@ -68,6 +70,7 @@ func init() {
 	bootstrapCmd.Flags().StringVar(&bootstrapKernelVer, "kernel-version", "6.6", "Linux kernel version (e.g. 6.6)")
 	bootstrapCmd.Flags().StringVar(&bootstrapBusyboxVer, "busybox-version", "1.36.1", "Busybox version (e.g. 1.36.1)")
 	bootstrapCmd.Flags().BoolVar(&bootstrapUEFI, "uefi", false, "Enable UEFI boot support")
+	bootstrapCmd.Flags().BoolVar(&bootstrapSkipToolchain, "skip-toolchain", false, "Skip toolchain compilation (binutils, gcc, glibc)")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipKernel, "skip-kernel", false, "Skip kernel compilation")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipBusybox, "skip-busybox", false, "Skip busybox compilation")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipInitramfs, "skip-initramfs", false, "Skip initramfs generation")

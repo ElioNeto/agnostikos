@@ -52,6 +52,23 @@ func (p *PacmanBackend) Update() error {
 	return nil
 }
 
+func (p *PacmanBackend) List() ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	out, err := p.exec.RunContext(ctx, "pacman", "-Q")
+	if err != nil {
+		return nil, fmt.Errorf("pacman list: %s — %s", err, strings.TrimSpace(string(out)))
+	}
+	var results []string
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			results = append(results, line)
+		}
+	}
+	return results, nil
+}
+
 func (p *PacmanBackend) Search(query string) ([]string, error) {
 	if strings.TrimSpace(query) == "" {
 		return nil, fmt.Errorf("search query cannot be empty")

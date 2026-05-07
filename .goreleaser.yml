@@ -1,5 +1,7 @@
 version: 2
 
+project_name: agnostikos
+
 builds:
   - binary: agnostic
     goos:
@@ -7,9 +9,47 @@ builds:
     goarch:
       - amd64
       - arm64
+    ldflags:
+      - -X github.com/ElioNeto/agnostikos/cmd/agnostic.Version={{ .Version }}
+      - -X github.com/ElioNeto/agnostikos/cmd/agnostic.Commit={{ .ShortCommit }}
 
 archives:
   - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+
+nfpms:
+  - id: packages
+    package_name: agnostikos
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}"
+    homepage: https://github.com/ElioNeto/agnostikos
+    description: AgnosticOS Hybrid Package Manager
+    maintainer: ElioNeto <elioneto@users.noreply.github.com>
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/local/bin
+
+brews:
+  - name: agnostikos
+    repository:
+      owner: ElioNeto
+      name: homebrew-tap
+    homepage: https://github.com/ElioNeto/agnostikos
+    description: "Meta-wrapper package manager for Pacman, Nix, and Flatpak"
+    license: "MIT"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    directory: Formula
+    install: |
+      bin.install "agnostic"
 
 checksum:
   name_template: 'checksums.txt'
+
+changelog:
+  use: github-native

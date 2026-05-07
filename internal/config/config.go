@@ -3,9 +3,25 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+// SupportedBackends lista os backends válidos
+var SupportedBackends = map[string]bool{
+	"pacman":  true,
+	"nix":     true,
+	"flatpak": true,
+}
+
+// localeRegex valida formato <idioma>_<PAÍS>.<codificação> (ex: pt_BR.UTF-8)
+var localeRegex = regexp.MustCompile(`^[a-z]{2}_[A-Z]{2}\.[a-zA-Z0-9._-]+$`)
+
+// timezoneRegex valida formato <Região>/<Cidade> (ex: America/Sao_Paulo)
+// ou nomes simples como "UTC", "CET", "EST5EDT"
+var timezoneRegex = regexp.MustCompile(`^[A-Za-z_]+(/[A-Za-z_]+)?$`)
 
 // Config represents the agnostic.yaml configuration structure.
 type Config struct {
@@ -39,16 +55,59 @@ func Load(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// Validate checks that all required fields are present.
+// Validate checks all fields in the config for correctness.
+// Returns a list of all validation errors (not just the first one).
 func (c *Config) Validate() error {
+	var errs []string
+
+	// Version
 	if c.Version == "" {
-		return fmt.Errorf("version is required")
+		errs = append(errs, "version is required")
 	}
+
+	// Locale
 	if c.Locale == "" {
-		return fmt.Errorf("locale is required")
+		errs = append(errs, "locale is required")
+	} else if !localeRegex.MatchString(c.Locale) {
+		errs = append(errs, fmt.Sprintf("locale %q has invalid format — expected <lang>_<REGION>.<encoding> (e.g. pt_BR.UTF-8)", c.Locale))
 	}
+
+	// Timezone (optional, validate if set)
+	if c.Timezone != "" && !timezoneRegex.MatchString(c.Timezone) {
+		errs = append(errs, fmt.Sprintf("timezone %q has invalid format — expected <Region>/<City> (e.g. America/Sao_Paulo)", c.Timezone))
+	}
+
+	// Backends.Default
 	if c.Backends.Default == "" {
-		return fmt.Errorf("backends.default is required")
+		errs = append(errs, "backends.default is required")
+	} else if !SupportedBackends[c.Backends.Default] {
+		errs = append(errs, fmt.Sprintf("backends.default %q is not supported — must be one of: pacman, nix, flatpak", c.Backends.Default))
+	}
+
+	// Backends.Fallback (optional, validate if set)
+	if c.Backends.Fallback != "" && !SupportedBackends[c.Backends.Fallback] {
+		errs = append(errs, fmt.Sprintf("backends.fallback %q is not supported — must be one of: pacman, nix, flatpak", c.Backends.Fallback))
+	}
+
+	// Packages — check for empty entries
+	for i, pkg := range c.Packages.Base {
+		if strings.TrimSpace(pkg) == "" {
+			errs = append(errs, fmt.Sprintf("packages.base[%d] is empty", i))
+		}
+	}
+	for i, pkg := range c.Packages.Extra {
+		if strings.TrimSpace(pkg) == "" {
+			errs = append(errs, fmt.Sprintf("packages.extra[%d] is empty", i))
+		}
+	}
+
+	// User (optional, validate if set)
+	if c.User.Shell != "" && !strings.HasPrefix(c.User.Shell, "/") {
+		errs = append(errs, fmt.Sprintf("user.shell %q must be an absolute path (starting with /)", c.User.Shell))
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("config validation failed:\n  - %s", strings.Join(errs, "\n  - "))
 	}
 	return nil
 }

@@ -211,6 +211,7 @@ type BootstrapConfig struct {
 	KernelVersion  string // versão do kernel Linux (ex: "6.6")
 	BusyboxVersion string // versão do Busybox (ex: "1.36.1")
 	UEFI           bool   // gerar estrutura UEFI
+	SkipToolchain  bool   // pular compilação da toolchain (binutils, gcc, glibc)
 	SkipKernel     bool   // pular compilação do kernel
 	SkipBusybox    bool   // pular compilação do busybox
 	SkipInitramfs  bool   // pular geração do initramfs
@@ -229,24 +230,58 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 		cfg.KernelVersion, cfg.BusyboxVersion, cfg.UEFI, cfg.Force)
 
 	// Step 1: RootFS — idempotente, MkdirAll é no-op se já existe
-	fmt.Println("\n=== Step 1/6: Create RootFS ===")
+	fmt.Println("\n=== Step 1/9: Create RootFS ===")
 	if err := CreateRootFS(cfg.TargetDir); err != nil {
 		return fmt.Errorf("create rootfs: %w", err)
 	}
 
-	// Step 2: Toolchain — já tem guard interno por arquivo
-	fmt.Println("\n=== Step 2/6: Download Toolchain ===")
+	// Step 2: Toolchain — download dos tarballs
+	fmt.Println("\n=== Step 2/9: Download Toolchain ===")
 	if err := DownloadToolchain(cfg.TargetDir); err != nil {
 		return fmt.Errorf("download toolchain: %w", err)
 	}
 
-	// Step 3: Kernel
+	tcCfg := ToolchainConfig{
+		TargetDir: cfg.TargetDir,
+	}
+
+	// Step 3: Build binutils
+	if !cfg.SkipToolchain {
+		fmt.Println("\n=== Step 3/9: Build binutils ===")
+		if err := BuildBinutils(ctx, tcCfg); err != nil {
+			return fmt.Errorf("build binutils: %w", err)
+		}
+	} else {
+		fmt.Println("\n=== Step 3/9: Build binutils (skipped) ===")
+	}
+
+	// Step 4: Build GCC (pass 1, C only)
+	if !cfg.SkipToolchain {
+		fmt.Println("\n=== Step 4/9: Build GCC (pass 1) ===")
+		if err := BuildGCC(ctx, tcCfg); err != nil {
+			return fmt.Errorf("build gcc: %w", err)
+		}
+	} else {
+		fmt.Println("\n=== Step 4/9: Build GCC (skipped) ===")
+	}
+
+	// Step 5: Build glibc
+	if !cfg.SkipToolchain {
+		fmt.Println("\n=== Step 5/9: Build glibc ===")
+		if err := BuildGLibc(ctx, tcCfg); err != nil {
+			return fmt.Errorf("build glibc: %w", err)
+		}
+	} else {
+		fmt.Println("\n=== Step 5/9: Build glibc (skipped) ===")
+	}
+
+	// Step 6: Kernel
 	kernelArtifact := filepath.Join(cfg.TargetDir, "boot", "vmlinuz-"+cfg.KernelVersion)
 	if !cfg.SkipKernel {
 		if !cfg.Force && artifactExists(kernelArtifact) {
-			fmt.Printf("\n=== Step 3/6: Build Kernel (cached: %s) ===\n", kernelArtifact)
+			fmt.Printf("\n=== Step 6/9: Build Kernel (cached: %s) ===\n", kernelArtifact)
 		} else {
-			fmt.Println("\n=== Step 3/6: Build Kernel ===")
+			fmt.Println("\n=== Step 6/9: Build Kernel ===")
 			kernelCfg := KernelConfig{
 				Version:    cfg.KernelVersion,
 				SourcesDir: sourcesDir(cfg.TargetDir),
@@ -258,16 +293,16 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 			}
 		}
 	} else {
-		fmt.Println("\n=== Step 3/6: Build Kernel (skipped by flag) ===")
+		fmt.Println("\n=== Step 6/9: Build Kernel (skipped by flag) ===")
 	}
 
 	// Step 4: Busybox
 	busyboxArtifact := filepath.Join(cfg.TargetDir, "busybox-install", "bin", "busybox")
 	if !cfg.SkipBusybox {
 		if !cfg.Force && artifactExists(busyboxArtifact) {
-			fmt.Printf("\n=== Step 4/6: Build Busybox (cached: %s) ===\n", busyboxArtifact)
+			fmt.Printf("\n=== Step 7/9: Build Busybox (cached: %s) ===\n", busyboxArtifact)
 		} else {
-			fmt.Println("\n=== Step 4/6: Build Busybox ===")
+			fmt.Println("\n=== Step 7/9: Build Busybox ===")
 			busyboxCfg := BusyboxConfig{
 				Version:   cfg.BusyboxVersion,
 				TargetDir: cfg.TargetDir,
@@ -277,16 +312,16 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 			}
 		}
 	} else {
-		fmt.Println("\n=== Step 4/6: Build Busybox (skipped by flag) ===")
+		fmt.Println("\n=== Step 7/9: Build Busybox (skipped by flag) ===")
 	}
 
 	// Step 5: Initramfs
 	initramfsArtifact := filepath.Join(cfg.TargetDir, "boot", "initramfs.img")
 	if !cfg.SkipInitramfs {
 		if !cfg.Force && artifactExists(initramfsArtifact) {
-			fmt.Printf("\n=== Step 5/6: Build Initramfs (cached: %s) ===\n", initramfsArtifact)
+			fmt.Printf("\n=== Step 8/9: Build Initramfs (cached: %s) ===\n", initramfsArtifact)
 		} else {
-			fmt.Println("\n=== Step 5/6: Build Initramfs ===")
+			fmt.Println("\n=== Step 8/9: Build Initramfs ===")
 			outputDir := filepath.Join(cfg.TargetDir, "boot")
 			if err := os.MkdirAll(outputDir, 0755); err != nil {
 				return fmt.Errorf("mkdir boot: %w", err)
@@ -296,16 +331,16 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 			}
 		}
 	} else {
-		fmt.Println("\n=== Step 5/6: Build Initramfs (skipped by flag) ===")
+		fmt.Println("\n=== Step 8/9: Build Initramfs (skipped by flag) ===")
 	}
 
 	// Step 6: GRUB
 	grubArtifact := filepath.Join(cfg.TargetDir, "boot", "grub", "grub.cfg")
 	if !cfg.SkipGRUB {
 		if !cfg.Force && artifactExists(grubArtifact) {
-			fmt.Printf("\n=== Step 6/6: Install GRUB (cached: %s) ===\n", grubArtifact)
+			fmt.Printf("\n=== Step 9/9: Install GRUB (cached: %s) ===\n", grubArtifact)
 		} else {
-			fmt.Println("\n=== Step 6/6: Install GRUB ===")
+			fmt.Println("\n=== Step 9/9: Install GRUB ===")
 			if err := InstallGRUB(ctx, GRUBConfig{
 				RootfsDir:    cfg.TargetDir,
 				Device:       cfg.Device,
@@ -317,7 +352,7 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 			}
 		}
 	} else {
-		fmt.Println("\n=== Step 6/6: Install GRUB (skipped by flag) ===")
+		fmt.Println("\n=== Step 9/9: Install GRUB (skipped by flag) ===")
 	}
 
 	fmt.Printf("\n[bootstrap] ✅ Bootstrap complete at %s\n", cfg.TargetDir)

@@ -33,6 +33,9 @@ jobs:
       - name: Test
         run: go test -v -race -coverprofile=coverage.out ./...
 
+      - name: Verify integration tests compile (but don't run)
+        run: go test -tags=integration -run=^$ -count=0 ./internal/manager/
+
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
@@ -59,22 +62,28 @@ jobs:
           version: latest
           args: --timeout=5m ./...
 
+  # test-iso: requires KVM + root + 20min kernel compilation.
+  # Locally: HEADLESS=1 BOOT_TIMEOUT=300 make test-iso-headless
+  #
+  # This job runs only on self-hosted runners with KVM access.
+  # GitHub-hosted runners do not support KVM or long-running builds.
   test-iso:
+    if: github.event_name == 'workflow_dispatch'
     needs: [build-and-test, lint]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    runs-on: [self-hosted, linux, x64, kvm]
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.22'
       - name: Install dependencies
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-x86 xorriso
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-x86 xorriso grub-pc-bin grub-efi-amd64-bin mtools ovmf
       - name: Build
         run: make build
-      - name: Bootstrap minimal RootFS
-        run: make bootstrap
+      - name: Bootstrap (skip GRUB for ISO-only build)
+        run: sudo make bootstrap ARGS="--skip-grub"
       - name: Build ISO
         run: make iso
       - name: Test ISO (headless, TCG)
-        run: make test-iso-headless
+        run: HEADLESS=1 BOOT_TIMEOUT=300 make test-iso-headless

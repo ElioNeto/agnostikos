@@ -74,6 +74,25 @@ func TestPacmanBackend_Update_ExecError(t *testing.T) {
 	}
 }
 
+func TestPacmanBackend_List_Success(t *testing.T) {
+	output := "firefox 124.0-1\ngit 2.44.0\nlinux 6.6.0"
+	p := &PacmanBackend{exec: &MockExecutor{Output: []byte(output)}}
+	results, err := p.List()
+	if err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+	if len(results) != 3 {
+		t.Errorf("expected 3 results, got %d", len(results))
+	}
+}
+
+func TestPacmanBackend_List_ExecError(t *testing.T) {
+	p := &PacmanBackend{exec: &MockExecutor{Err: errors.New("list failed")}}
+	if _, err := p.List(); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
 func TestPacmanBackend_Search_EmptyQuery(t *testing.T) {
 	p := &PacmanBackend{exec: &MockExecutor{}}
 	if _, err := p.Search(""); err == nil {
@@ -166,6 +185,31 @@ func TestNixBackend_Update_ExecError(t *testing.T) {
 	}
 }
 
+func TestNixBackend_List_Success(t *testing.T) {
+	output := `[
+  {
+    "active": true,
+    "name": "nixpkgs.firefox",
+    "version": "124.0"
+  }
+]`
+	n := &NixBackend{exec: &MockExecutor{Output: []byte(output)}}
+	results, err := n.List()
+	if err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+	if len(results) == 0 {
+		t.Error("expected non-empty results")
+	}
+}
+
+func TestNixBackend_List_ExecError(t *testing.T) {
+	n := &NixBackend{exec: &MockExecutor{Err: errors.New("list failed")}}
+	if _, err := n.List(); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
 func TestNixBackend_Search_EmptyQuery(t *testing.T) {
 	n := &NixBackend{exec: &MockExecutor{}}
 	if _, err := n.Search(""); err == nil {
@@ -250,6 +294,25 @@ func TestFlatpakBackend_Update_ExecError(t *testing.T) {
 	}
 }
 
+func TestFlatpakBackend_List_Success(t *testing.T) {
+	output := "Application\tName\tDescription\ncom.spotify.Client\tSpotify\tMusic streaming\norg.mozilla.firefox\tFirefox\tWeb browser"
+	f := &FlatpakBackend{exec: &MockExecutor{Output: []byte(output)}}
+	results, err := f.List()
+	if err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+	if len(results) != 2 {
+		t.Errorf("expected 2 results (excluding header), got %d", len(results))
+	}
+}
+
+func TestFlatpakBackend_List_ExecError(t *testing.T) {
+	f := &FlatpakBackend{exec: &MockExecutor{Err: errors.New("list failed")}}
+	if _, err := f.List(); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
 func TestFlatpakBackend_Search_EmptyQuery(t *testing.T) {
 	f := &FlatpakBackend{exec: &MockExecutor{}}
 	if _, err := f.Search(""); err == nil {
@@ -316,3 +379,4 @@ func (m *MockBackend) Install(pkgName string) error            { return m.Instal
 func (m *MockBackend) Remove(pkgName string) error             { return m.RemoveErr }
 func (m *MockBackend) Update() error                           { return m.UpdateErr }
 func (m *MockBackend) Search(q string) ([]string, error)       { return m.SearchRes, m.SearchErr }
+func (m *MockBackend) List() ([]string, error)                 { return []string{"pkg1", "pkg2"}, nil }

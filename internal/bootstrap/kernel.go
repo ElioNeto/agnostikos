@@ -14,7 +14,33 @@ type KernelConfig struct {
 	Version    string // ex: "6.8.0"
 	SourcesDir string // ex: "/mnt/lfs/sources"
 	OutputDir  string // ex: "/mnt/lfs/boot"
-	Defconfig  string // ex: "x86_64_defconfig"
+	Defconfig  string // ex: "x86_64_defconfig" — auto-detected from arch if empty
+	Arch       string // target arch: "amd64" or "arm64" — auto-detected if empty
+}
+
+// kernelArch mapeia Go arch names para nomes de arquitetura do kernel Linux.
+// Retorna (kernel_arch, kernel_defconfig, bzImage_path).
+func kernelArch(arch string) (karch, defconfig, imagePath string) {
+	switch arch {
+	case "arm64":
+		return "arm64", "defconfig", "arch/arm64/boot/Image"
+	default:
+		return "x86_64", "x86_64_defconfig", "arch/x86/boot/bzImage"
+	}
+}
+
+// autoDetectArch returns the host's Go arch if cfg.Arch is empty
+func autoDetectArch(cfg KernelConfig) string {
+	if cfg.Arch != "" {
+		return cfg.Arch
+	}
+	// Detect from runtime
+	switch runtime.GOARCH {
+	case "arm64":
+		return "arm64"
+	default:
+		return "amd64"
+	}
 }
 
 // BuildKernel automatiza download, configuração e compilação do Linux kernel
@@ -23,6 +49,9 @@ func BuildKernel(cfg KernelConfig) error {
 	tarball := fmt.Sprintf("linux-%s.tar.xz", cfg.Version)
 	srcPath := filepath.Join(cfg.SourcesDir, "linux-"+cfg.Version)
 	tarballPath := filepath.Join(cfg.SourcesDir, tarball)
+
+	arch := autoDetectArch(cfg)
+	karch, defconfig, imageRelPath := kernelArch(arch)
 
 	if err := os.MkdirAll(cfg.SourcesDir, 0755); err != nil {
 		return fmt.Errorf("mkdir sourcesDir: %w", err)
@@ -55,37 +84,45 @@ func BuildKernel(cfg KernelConfig) error {
 	// 3. mrproper (best-effort: ignora erro)
 	_ = exec.Command("make", "-C", srcPath, "mrproper").Run()
 
-	// 4. defconfig
-	fmt.Printf("[kernel] Applying %s...\n", cfg.Defconfig)
-	cmd := exec.Command("make", "-C", srcPath, cfg.Defconfig)
+	// 4. defconfig — use cfg.Defconfig if set, otherwise auto-detect from arch
+	if cfg.Defconfig == "" {
+		cfg.Defconfig = defconfig
+	}
+	fmt.Printf("[kernel] Applying %s (arch: %s)...\n", cfg.Defconfig, arch)
+	cmd := exec.Command("make", "-C", srcPath, "ARCH="+karch, cfg.Defconfig)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("defconfig: %w", err)
 	}
 
 	// 5. Compile (parallel)
+	imageTarget := filepath.Base(imageRelPath) // "bzImage" for x86, "Image" for arm64
 	jobs := fmt.Sprintf("-j%d", runtime.NumCPU())
-	fmt.Printf("[kernel] Compiling with %s (this may take a while)...\n", jobs)
-	cmd = exec.Command("make", "-C", srcPath, jobs, "bzImage", "modules")
+	fmt.Printf("[kernel] Compiling with %s (arch: %s, target: %s)...\n", jobs, arch, imageTarget)
+	cmd = exec.Command("make", "-C", srcPath, "ARCH="+karch, jobs, imageTarget, "modules")
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("compile: %w", err)
 	}
 
-	// 6. Install bzImage
-	src := filepath.Join(srcPath, "arch/x86/boot/bzImage")
-	dst := filepath.Join(cfg.OutputDir, "vmlinuz-"+cfg.Version)
+	// 6. Install kernel image
+	src := filepath.Join(srcPath, imageRelPath)
+	imageName := "vmlinuz-" + cfg.Version
+	if arch == "arm64" {
+		imageName = "Image-" + cfg.Version
+	}
+	dst := filepath.Join(cfg.OutputDir, imageName)
 	data, err := os.ReadFile(src)
 	if err != nil {
-		return fmt.Errorf("read bzImage: %w", err)
+		return fmt.Errorf("read kernel image from %s: %w", imageRelPath, err)
 	}
 	if err := os.WriteFile(dst, data, 0644); err != nil {
-		return fmt.Errorf("write vmlinuz: %w", err)
+		return fmt.Errorf("write kernel image: %w", err)
 	}
 
 	// 7. Install modules (best-effort: ignora erro)
 	modPath := filepath.Dir(cfg.OutputDir)
-	cmd = exec.Command("make", "-C", srcPath, "INSTALL_MOD_PATH="+modPath, "modules_install")
+	cmd = exec.Command("make", "-C", srcPath, "ARCH="+karch, "INSTALL_MOD_PATH="+modPath, "modules_install")
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	_ = cmd.Run()
 

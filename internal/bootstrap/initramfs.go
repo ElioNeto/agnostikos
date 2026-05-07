@@ -31,16 +31,43 @@ func BuildInitramfs(ctx context.Context, rootfsDir, outputPath string) error {
 		}
 	}
 
-	// Criar /init script — mostra a mensagem de boas-vindas e abre um shell
-	// interativo. O usuário digita comandos. Ao digitar exit ou Ctrl+D,
-	// o sistema desliga.
+	// Criar /init script — monta sistema de arquivos virtual, configura rede,
+	// verifica se há um RootFS real em /mnt/root para switch_root, e se não
+	// houver, abre um shell interativo com todas as ferramentas do Busybox.
 	initScript := `#!/bin/sh
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+# Mount virtual filesystems
 mount -t proc none /proc
 mount -t sysfs none /sys
 mount -t devtmpfs none /dev
-echo "Welcome to Agnostikos minimal system"
+mkdir -p /dev/pts /dev/shm
+mount -t devpts none /dev/pts
+mount -t tmpfs none /dev/shm
+
+# Configure loopback network interface
+ip link set lo up
+
+# Try to bring up eth0 with DHCP
+ip link set eth0 up 2>/dev/null
+udhcpc -i eth0 -q -n 2>/dev/null || true
+
 echo ""
+echo "================================================"
+echo "  Welcome to Agnostikos minimal system"
+echo "  Kernel: $(uname -r)"
+echo "================================================"
+echo ""
+
+# Check if there's a real RootFS to switch to
+if [ -x /mnt/root/sbin/init ]; then
+    echo "[init] RootFS found at /mnt/root, switching root..."
+    mount --move /proc /mnt/root/proc
+    mount --move /sys /mnt/root/sys
+    mount --move /dev /mnt/root/dev
+    exec switch_root /mnt/root /sbin/init
+fi
+
 echo "Type 'exit' or press Ctrl+D to power off."
 echo ""
 
@@ -75,8 +102,39 @@ poweroff -f
 			return fmt.Errorf("write busybox: %w", err)
 		}
 
-		// Cria links simbólicos para os applets essenciais de inicialização
-		applets := []string{"sh", "mount", "poweroff", "sleep", "reboot", "halt", "dmesg", "cat", "echo"}
+		// Cria links simbólicos para os applets do Busybox.
+		// Estes são os comandos disponíveis no shell interativo de resgate.
+		applets := []string{
+			"sh", "mount", "poweroff", "sleep", "reboot", "halt",
+			"dmesg", "cat", "echo",
+			// Navegação e arquivos
+			"ls", "cd", "pwd", "cp", "mv", "rm", "mkdir", "rmdir", "touch",
+			"ln", "find", "grep", "sed", "awk", "more", "less", "head", "tail",
+			"sort", "cut", "tr", "uniq", "wc", "tee",
+			// Sistema e processos
+			"ps", "top", "free", "df", "du", "uname", "id", "whoami",
+			"kill", "killall", "pgrep", "pkill", "uptime", "watch",
+			"clear", "reset", "env", "printenv", "set",
+			"chmod", "chown", "chroot", "mknod", "mkfifo",
+			// Rede
+			"ip", "ifconfig", "ping", "netstat", "nslookup",
+			"nc", "telnet", "wget", "tftp",
+			// Compressão e arquivamento
+			"tar", "gzip", "gunzip", "bzip2", "bunzip2", "xz", "unxz",
+			"losetup", "blkid",
+			// Editores e utilitários
+			"vi", "ed", "patch", "diff", "cmp",
+			"md5sum", "sha1sum", "sha256sum", "sha512sum",
+			"base64", "xxd", "hexdump", "od",
+			// Montagem e disco
+			"umount", "swapon", "swapoff", "fdisk", "fsck", "mkfs.ext2",
+			"dd", "sync",
+			// Shell e scripting
+			"test", "expr", "xargs", "which", "dirname", "basename",
+			"date", "cal", "time", "sleep",
+			// Log e debug
+			"logger", "logread", "sysctl", "stty",
+		}
 		for _, a := range applets {
 			linkPath := filepath.Join(targetBin, a)
 			if err := os.Symlink("busybox", linkPath); err != nil {

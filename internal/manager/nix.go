@@ -56,6 +56,24 @@ func (n *NixBackend) Update() error {
 	return nil
 }
 
+func (n *NixBackend) List() ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	out, err := n.exec.RunContext(ctx, "nix", "profile", "list", "--json")
+	if err != nil {
+		return nil, fmt.Errorf("nix list: %s — %s", err, strings.TrimSpace(string(out)))
+	}
+	// nix profile list --json retorna JSON array — simplificamos para texto puro
+	var results []string
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			results = append(results, line)
+		}
+	}
+	return results, nil
+}
+
 func (n *NixBackend) Search(query string) ([]string, error) {
 	if strings.TrimSpace(query) == "" {
 		return nil, fmt.Errorf("search query cannot be empty")

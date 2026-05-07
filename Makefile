@@ -82,4 +82,8 @@ bootstrap: build ## Bootstrap RootFS into $(LFS) — use ARGS="--skip-grub" etc.
 dev: ## Run in development mode
 	@$(GO) run . --help
 
+package: build ## Build .deb and .rpm packages
+	@bash scripts/package.sh
+
+.PHONY: package
 .DEFAULT_GOAL := help

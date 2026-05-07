@@ -52,6 +52,24 @@ func (f *FlatpakBackend) Update() error {
 	return nil
 }
 
+func (f *FlatpakBackend) List() ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	out, err := f.exec.RunContext(ctx, "flatpak", "list", "--columns=application,name,description")
+	if err != nil {
+		return nil, fmt.Errorf("flatpak list: %s — %s", err, strings.TrimSpace(string(out)))
+	}
+	var results []string
+	for i, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if i == 0 || line == "" {
+			continue // skip header
+		}
+		results = append(results, line)
+	}
+	return results, nil
+}
+
 func (f *FlatpakBackend) Search(query string) ([]string, error) {
 	if strings.TrimSpace(query) == "" {
 		return nil, fmt.Errorf("search query cannot be empty")
