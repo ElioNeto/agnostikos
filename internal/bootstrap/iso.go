@@ -139,10 +139,9 @@ exec switch_root /mnt/root /sbin/init
 
 // setupGRUBUEFI cria a estrutura UEFI correta:
 //  1. Gera BOOTX64.EFI via grub-mkstandalone com grub.cfg embutido
-//  2. Cria efi.img (imagem FAT) contendo EFI/BOOT/BOOTX64.EFI via mtools
-//     (UEFI El Torito exige imagem FAT, não o binário EFI diretamente)
+//  2. Cria efi.img (imagem FAT de 4MB) contendo EFI/BOOT/BOOTX64.EFI
+//     usando mtools com sintaxe ::path (obrigatório com -i)
 func setupGRUBUEFI(isoDir, bootDir, workDir string, cfg ISOConfig) error {
-	// Verifica dependências
 	for _, tool := range []string{"grub-mkstandalone", "mformat", "mcopy"} {
 		if _, err := exec.LookPath(tool); err != nil {
 			return fmt.Errorf("%s not found — install grub-efi-amd64-bin and mtools", tool)
@@ -181,26 +180,34 @@ menuentry "%s %s" {
 		return fmt.Errorf("grub-mkstandalone: %w", err)
 	}
 
-	// Cria imagem FAT (efi.img) — UEFI El Torito requer imagem FAT, não EFI direto
+	// Cria imagem FAT de 4MB — mtools requer sintaxe ::path com -i
 	efiImg := filepath.Join(workDir, "efi.img")
-	// 4MB é suficiente para BOOTX64.EFI (~1-2MB)
-	if err := exec.Command("dd", "if=/dev/zero", "of="+efiImg, "bs=1M", "count=4").Run(); err != nil {
-		return fmt.Errorf("dd efi.img: %w", err)
-	}
-	if err := exec.Command("mformat", "-i", efiImg, "-F").Run(); err != nil {
-		return fmt.Errorf("mformat efi.img: %w", err)
-	}
-	if err := exec.Command("mmd", "-i", efiImg, "EFI").Run(); err != nil {
-		return fmt.Errorf("mmd EFI/BOOT: %w", err)
-	}
-	if err := exec.Command("mmd", "-i", efiImg, "EFI/BOOT").Run(); err != nil {
-		return fmt.Errorf("mmd EFI/BOOT: %w", err)
-	}
-	if err := exec.Command("mcopy", "-i", efiImg, efiBin, "EFI/BOOT/BOOTX64.EFI").Run(); err != nil {
-		return fmt.Errorf("mcopy BOOTX64.EFI: %w", err)
+	run := func(name string, args ...string) error {
+		c := exec.Command(name, args...)
+		out, err := c.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("%s %v: %w\noutput: %s", name, args, err, string(out))
+		}
+		return nil
 	}
 
-	// Copia efi.img para dentro da árvore da ISO (boot/grub/efi.img)
+	if err := run("dd", "if=/dev/zero", "of="+efiImg, "bs=1M", "count=4"); err != nil {
+		return err
+	}
+	if err := run("mformat", "-i", efiImg, "-F", "::"); err != nil {
+		return err
+	}
+	if err := run("mmd", "-i", efiImg, "::EFI"); err != nil {
+		return err
+	}
+	if err := run("mmd", "-i", efiImg, "::EFI/BOOT"); err != nil {
+		return err
+	}
+	if err := run("mcopy", "-i", efiImg, efiBin, "::EFI/BOOT/BOOTX64.EFI"); err != nil {
+		return err
+	}
+
+	// Copia efi.img para a árvore da ISO
 	efiImgDest := filepath.Join(grubDir, "efi.img")
 	imgData, err := os.ReadFile(efiImg)
 	if err != nil {
@@ -219,7 +226,6 @@ func setupIsolinux(isoDir string, cfg ISOConfig) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("mkdir isolinux: %w", err)
 	}
-
 	candidates := []string{
 		"/usr/lib/ISOLINUX/isolinux.bin",
 		"/usr/lib/syslinux/bios/isolinux.bin",
@@ -243,8 +249,6 @@ func setupIsolinux(isoDir string, cfg ISOConfig) error {
 	if err := os.WriteFile(filepath.Join(dir, "isolinux.bin"), data, 0644); err != nil {
 		return fmt.Errorf("write isolinux.bin: %w", err)
 	}
-
-	// console=ttyS0,115200 garante output serial no QEMU headless
 	cfgContent := `DEFAULT agnostic
 TIMEOUT 50
 LABEL agnostic
@@ -260,11 +264,9 @@ LABEL agnostic
 func runXorriso(isoDir, workDir string, cfg ISOConfig) error {
 	args := []string{"-as", "mkisofs", "-o", cfg.Output, "-V", cfg.BootLabel, "-J", "-R"}
 	if cfg.UEFI {
-		// efi.img é a imagem FAT que o UEFI El Torito requer
-		efiImgISO := "boot/grub/efi.img"
 		args = append(args,
 			"-eltorito-alt-boot",
-			"-e", efiImgISO,
+			"-e", "boot/grub/efi.img",
 			"-no-emul-boot",
 			"-isohybrid-gpt-basdat",
 		)
