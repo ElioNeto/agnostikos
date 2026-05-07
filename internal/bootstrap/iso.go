@@ -139,8 +139,8 @@ exec switch_root /mnt/root /sbin/init
 
 // setupGRUBUEFI cria a estrutura UEFI correta:
 //  1. Gera BOOTX64.EFI via grub-mkstandalone com grub.cfg embutido
-//  2. Cria efi.img (imagem FAT de 4MB) contendo EFI/BOOT/BOOTX64.EFI
-//     usando mtools com sintaxe ::path (obrigatório com -i)
+//  2. Cria efi.img (imagem FAT de 20MB) contendo EFI/BOOT/BOOTX64.EFI
+//     grub-mkstandalone com --fonts=unicode gera ~3-4MB; 20MB dá folga segura
 func setupGRUBUEFI(isoDir, bootDir, workDir string, cfg ISOConfig) error {
 	for _, tool := range []string{"grub-mkstandalone", "mformat", "mcopy"} {
 		if _, err := exec.LookPath(tool); err != nil {
@@ -180,7 +180,18 @@ menuentry "%s %s" {
 		return fmt.Errorf("grub-mkstandalone: %w", err)
 	}
 
-	// Cria imagem FAT de 4MB — mtools requer sintaxe ::path com -i
+	// Verifica tamanho real do EFI e dimensiona a imagem FAT com folga (2x + 2MB)
+	efiBinInfo, err := os.Stat(efiBin)
+	if err != nil {
+		return fmt.Errorf("stat BOOTX64.EFI: %w", err)
+	}
+	efiSizeMB := (efiBinInfo.Size()/(1024*1024) + 1) * 2 + 2
+	if efiSizeMB < 10 {
+		efiSizeMB = 10
+	}
+	fmt.Printf("[iso] BOOTX64.EFI size: %d bytes — allocating %dMB FAT image\n", efiBinInfo.Size(), efiSizeMB)
+
+	// Cria imagem FAT — mtools requer sintaxe ::path com -i
 	efiImg := filepath.Join(workDir, "efi.img")
 	run := func(name string, args ...string) error {
 		c := exec.Command(name, args...)
@@ -191,7 +202,7 @@ menuentry "%s %s" {
 		return nil
 	}
 
-	if err := run("dd", "if=/dev/zero", "of="+efiImg, "bs=1M", "count=4"); err != nil {
+	if err := run("dd", "if=/dev/zero", "of="+efiImg, "bs=1M", fmt.Sprintf("count=%d", efiSizeMB)); err != nil {
 		return err
 	}
 	if err := run("mformat", "-i", efiImg, "-F", "::"); err != nil {
