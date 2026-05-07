@@ -31,14 +31,21 @@ func BuildInitramfs(ctx context.Context, rootfsDir, outputPath string) error {
 		}
 	}
 
-	// Criar /init script — mostra a mensagem de boas-vindas e desliga após 2s
-	// para que o teste headless possa verificar a saída serial sem timeout.
+	// Criar /init script — mostra a mensagem de boas-vindas e abre um shell
+	// interativo. O usuário digita comandos. Ao digitar exit ou Ctrl+D,
+	// o sistema desliga.
 	initScript := `#!/bin/sh
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 mount -t proc none /proc
 mount -t sysfs none /sys
 mount -t devtmpfs none /dev
 echo "Welcome to Agnostikos minimal system"
-sleep 2
+echo ""
+echo "Type 'exit' or press Ctrl+D to power off."
+echo ""
+
+# Run interactive shell. On exit, power off.
+/bin/sh
 poweroff -f
 `
 	initPath := filepath.Join(initDir, "init")

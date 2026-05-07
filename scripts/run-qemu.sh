@@ -14,7 +14,13 @@ ISO="${1:-build/agnostikos-latest.iso}"
 RAM="${RAM:-2G}"
 CPUS="${CPUS:-2}"
 HEADLESS="${HEADLESS:-0}"
-BOOT_TIMEOUT="${BOOT_TIMEOUT:-120}"
+# Timeout defaults: 30s headless, 300s interactive
+# Override via BOOT_TIMEOUT environment variable
+if [[ "$HEADLESS" == "1" ]]; then
+  BOOT_TIMEOUT="${BOOT_TIMEOUT:-30}"
+else
+  BOOT_TIMEOUT="${BOOT_TIMEOUT:-300}"
+fi
 SERIAL_LOG="/tmp/qemu-serial-$$.log"
 
 echo -e "${GREEN}[QEMU]${NO_COLOR} Starting AgnosticOS test..."
@@ -70,12 +76,17 @@ if [[ "$HEADLESS" == "1" ]]; then
   DISPLAY_FLAGS="-display none -serial file:${SERIAL_LOG}"
   echo -e "${GREEN}[QEMU]${NO_COLOR} Running headless (CI mode) - serial log: $SERIAL_LOG"
 else
-  DISPLAY_FLAGS="-vga virtio -serial mon:stdio"
+  # Interactive mode: -nographic mostra tudo no terminal (sem janela gráfica).
+  # O usuário vê as mensagens de boot e o shell do sistema, podendo digitar
+  # comandos diretamente. Ctrl+A X ou 'exit' no shell encerra a VM.
+  DISPLAY_FLAGS="-nographic"
+  echo -e "${GREEN}[QEMU]${NO_COLOR} Running interactively (nographic) - type Ctrl+A X to exit"
 fi
 
 cleanup() {
   [[ -n "$VARS_TMP" && -f "$VARS_TMP" ]] && rm -f "$VARS_TMP"
   [[ "$HEADLESS" == "1" && -f "$SERIAL_LOG" ]] && rm -f "$SERIAL_LOG"
+  return 0
 }
 
 # check_boot_output checks serial log for welcome message and exits accordingly
