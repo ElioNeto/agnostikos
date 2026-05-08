@@ -144,9 +144,12 @@ func createinitramfs(output string, testMode bool) error {
 		if err := os.WriteFile(bbDest, bbData, 0755); err != nil {
 			return fmt.Errorf("write busybox: %w", err)
 		}
-		// Symlink bin/sh → busybox (busybox detecta argv[0] e age como shell)
-		if err := os.Symlink("busybox", filepath.Join(initDir, "bin", "sh")); err != nil {
-			return fmt.Errorf("symlink bin/sh: %w", err)
+		// Symlinks para applets do busybox (cada applet é um symlink para busybox;
+		// busybox detecta argv[0] e executa o applet correspondente)
+		for _, applet := range []string{"sh", "mount", "poweroff", "uname"} {
+			if err := os.Symlink("busybox", filepath.Join(initDir, "bin", applet)); err != nil {
+				return fmt.Errorf("symlink bin/%s: %w", applet, err)
+			}
 		}
 		init := `#!/bin/sh
 mount -t proc none /proc

@@ -193,6 +193,15 @@ func TestCreateInitramfs_TestMode(t *testing.T) {
 		if !strings.Contains(listing, "bin/sh") {
 			t.Error("initramfs missing bin/sh symlink")
 		}
+		if !strings.Contains(listing, "bin/mount") {
+			t.Error("initramfs missing bin/mount symlink")
+		}
+		if !strings.Contains(listing, "bin/poweroff") {
+			t.Error("initramfs missing bin/poweroff symlink")
+		}
+		if !strings.Contains(listing, "bin/uname") {
+			t.Error("initramfs missing bin/uname symlink")
+		}
 	}
 }
 
