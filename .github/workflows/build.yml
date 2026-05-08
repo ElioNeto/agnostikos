@@ -73,7 +73,7 @@ jobs:
       - name: Build
         run: make build
       - name: Bootstrap RootFS (kernel + busybox + initramfs + GRUB)
-        run: make bootstrap ARGS="--skip-toolchain"
+        run: make bootstrap ARGS="--skip-toolchain --skip-grub"
       - name: Build ISO
         run: make iso
       - name: Test ISO (headless, TCG)
