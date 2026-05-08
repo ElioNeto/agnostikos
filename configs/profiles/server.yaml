@@ -19,12 +19,10 @@ packages:
 
   # ---- Monitoramento ----
   - btop
-  - htop
   - lsof
   - strace
 
   # ---- Rede ----
-  - curl
   - wget
   - nmap
   - netcat
@@ -33,6 +31,5 @@ packages:
 
   # ---- Segurança ----
   - gnupg
-  - openssh
   - fail2ban
   - ufw
