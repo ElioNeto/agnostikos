@@ -16,6 +16,7 @@ var (
 	bootstrapBusyboxVer    string
 	bootstrapArch          string
 	bootstrapUEFI          bool
+	bootstrapJobs          string
 	bootstrapSkipToolchain  bool
 	bootstrapSkipKernel    bool
 	bootstrapSkipBusybox   bool
@@ -53,6 +54,7 @@ Use --force para recompilar tudo mesmo que já exista.`,
 			BusyboxVersion: bootstrapBusyboxVer,
 			Arch:           bootstrapArch,
 			UEFI:           bootstrapUEFI,
+			Jobs:           bootstrapJobs,
 			SkipToolchain:  bootstrapSkipToolchain,
 			SkipKernel:     bootstrapSkipKernel,
 			SkipBusybox:    bootstrapSkipBusybox,
@@ -79,6 +81,7 @@ func init() {
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipBusybox, "skip-busybox", false, "Skip busybox compilation")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipInitramfs, "skip-initramfs", false, "Skip initramfs generation")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipGRUB, "skip-grub", false, "Skip GRUB installation")
+	bootstrapCmd.Flags().StringVar(&bootstrapJobs, "jobs", "", "Number of parallel make jobs for toolchain (default: min(host CPUs, 4))")
 	bootstrapCmd.Flags().BoolVar(&bootstrapForce, "force", false, "Force rebuild of all steps, ignoring cache")
 	rootCmd.AddCommand(bootstrapCmd)
 }

@@ -31,7 +31,13 @@ func toolchainNumCPUs(cfg ToolchainConfig) string {
 	if cfg.NumCPUs != "" {
 		return cfg.NumCPUs
 	}
-	return strconv.Itoa(runtime.NumCPU())
+	n := runtime.NumCPU()
+	// Limit to 4 parallel jobs by default to avoid OOM on memory-constrained
+	// systems. Each g++ process compiling GCC can use 1-3 GB of RAM.
+	if n > 4 {
+		n = 4
+	}
+	return strconv.Itoa(n)
 }
 
 func toolchainTarget(cfg ToolchainConfig) string {

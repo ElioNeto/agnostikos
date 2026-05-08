@@ -220,6 +220,7 @@ type BootstrapConfig struct {
 	SkipInitramfs  bool   // pular geração do initramfs
 	SkipGRUB       bool   // pular instalação do GRUB
 	Force          bool   // ignorar cache e recompilar tudo
+	Jobs           string // número de jobs paralelos para make -j (vazio = auto, max 4)
 }
 
 // kernelImageName retorna o nome do arquivo da imagem do kernel de acordo com a arquitetura.
@@ -241,8 +242,8 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	if arch == "" {
 		arch = runtime.GOARCH
 	}
-	fmt.Printf("[bootstrap] Config: kernel=%s busybox=%s arch=%s uefi=%v force=%v\n",
-		cfg.KernelVersion, cfg.BusyboxVersion, arch, cfg.UEFI, cfg.Force)
+	fmt.Printf("[bootstrap] Config: kernel=%s busybox=%s arch=%s uefi=%v force=%v jobs=%s\n",
+		cfg.KernelVersion, cfg.BusyboxVersion, arch, cfg.UEFI, cfg.Force, cfg.Jobs)
 
 	// Step 1: RootFS — idempotente, MkdirAll é no-op se já existe
 	fmt.Println("\n=== Step 1/9: Create RootFS ===")
@@ -258,6 +259,7 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 
 	tcCfg := ToolchainConfig{
 		TargetDir: cfg.TargetDir,
+		NumCPUs:   cfg.Jobs,
 	}
 
 	// Step 3: Build binutils
