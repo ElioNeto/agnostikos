@@ -1,29 +1,52 @@
 # Changelog
 
-## v0.1.0 (2026-05-08)
+All notable changes to this project will be documented in this file.
 
-### Features
-- Meta-package manager with Pacman, Nix, and Flatpak backends
-- Package installation via `agnostic install <pkg>`
-- YAML configuration system (`agnostic.yaml`)
-- Custom Linux distribution bootstrapper (`agnostic bootstrap`)
-- ISO image builder with BIOS/UEFI support (`agnostic iso build`)
-- QEMU integration for ISO testing (`make test-iso`)
-- CI/CD pipeline with GoReleaser releases
-- Documentation: README, CONTRIBUTING, architecture
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-### Backends
-- **Pacman**: Arch Linux package manager integration (stable)
-- **Nix**: NixOS/nix package manager integration (stable)
-- **Flatpak**: Cross-distro flatpak integration (stable)
+## [v0.1.0] - 2026-05-08
 
-### Technical
-- Written in Go 1.24
-- Cobra CLI framework
-- GoReleaser for multi-arch releases
-- CI: GitHub Actions (lint, test, build, ISO test)
-- Architecture: modular internal packages (config, manager, bootstrap, iso, isolation)
+### 🎉 First public release
 
-### Resolved Issues
-- **#18** — RootFS bootável real: kernel, GRUB, init mínimo. Full bootstrap pipeline with Linux kernel compilation, Busybox, initramfs generation, and GRUB installation (BIOS + UEFI, auto ESP mount).
-- **#19** — CI test-iso-headless with minimal ISO. Headless QEMU integration test for CI pipelines, using a minimal RootFS with host kernel and test initramfs.
+#### Added
+- **Bootstrap pipeline** — multi-step build system for generating a minimal Linux ISO from scratch:
+  - Toolchain build (binutils, GCC cross-compiler, glibc)
+  - BusyBox compilation and applet symlink setup
+  - Kernel compilation with minimal config
+  - RootFS assembly with essential directories and init scripts
+  - Initramfs creation (cpio + gzip) with full BusyBox applet set and interactive rescue shell
+  - GRUB bootloader integration
+  - ISO image generation via `xorriso`
+- **`agnostic` CLI** (Cobra-based):
+  - `agnostic bootstrap` — full ISO build pipeline with `--skip-toolchain` flag
+  - `agnostic install` — package installation via configurable backends (pacman, nix, flatpak)
+  - `agnostic install --config agnostic.yaml` — declarative package installation from YAML
+  - `agnostic tui` — interactive TUI for package search and management
+- **Multi-backend package manager** — unified interface for pacman, nix-env and flatpak
+- **`agnostic.yaml` config format** — declarative package lists with backend selection, locale, timezone, user and dotfiles settings
+- **QEMU smoke test** — automated boot validation via `scripts/run-qemu.sh`
+- **CI/CD** — GitHub Actions workflows for lint, test, build and release via GoReleaser
+- **GoReleaser** — automated release pipeline producing binaries for `linux/amd64` and `linux/arm64`
+
+#### Artifacts
+
+| File | Architecture |
+|---|---|
+| `agnostikos_0.1.0_linux_amd64.tar.gz` | amd64 |
+| `agnostikos_0.1.0_linux_arm64.tar.gz` | arm64 |
+| `agnostikos_0.1.0_amd64.deb` | amd64 (Debian/Ubuntu) |
+| `agnostikos_0.1.0_arm64.deb` | arm64 (Debian/Ubuntu) |
+| `agnostikos_0.1.0_amd64.rpm` | amd64 (Fedora/RHEL) |
+| `agnostikos_0.1.0_arm64.rpm` | arm64 (Fedora/RHEL) |
+| `checksums.txt` | SHA256 checksums |
+
+#### Bug Fixes
+- Fixed BusyBox applet symlink creation failing with `file exists` error when symlinks already existed in the initramfs `bin/` directory — now uses `os.IsExist` guard to skip existing symlinks idempotently
+
+#### Contributors
+- @ElioNeto — initial project setup and full implementation
+
+**Full Changelog**: https://github.com/ElioNeto/agnostikos/commits/v0.1.0
+
+[v0.1.0]: https://github.com/ElioNeto/agnostikos/releases/tag/v0.1.0
