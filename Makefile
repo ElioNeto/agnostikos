@@ -34,8 +34,12 @@ help: ## Show this help
 	@echo "    make iso       ARGS=\"--uefi\""
 
 # Garante que o diretório base exista antes de qualquer build
+# (CI runners podem não ter /mnt/data; usa sudo com fallback e chown)
 $(AGNOSTICOS_BASE):
-	@mkdir -p $(AGNOSTICOS_BASE)
+	@if ! mkdir -p $@ 2>/dev/null; then \
+		sudo mkdir -p $@; \
+		sudo chown $$(id -u):$$(id -g) $@; \
+	fi
 
 build: $(AGNOSTICOS_BASE) ## Build the CLI binary
 	@mkdir -p $(BUILD_DIR)

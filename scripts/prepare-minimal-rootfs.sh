@@ -25,11 +25,17 @@ BOOT_DIR="${MINIMAL_ROOT}/boot"
 
 echo -e "${GREEN}[prepare-minimal-rootfs]${NO_COLOR} Creating minimal rootfs at ${MINIMAL_ROOT}"
 
-# Ensure base directory exists
-mkdir -p "${AGNOSTICOS_BASE}"
+# Ensure base directory exists (may need sudo for /mnt/data on CI runners)
+if ! mkdir -p "${AGNOSTICOS_BASE}" 2>/dev/null; then
+  sudo mkdir -p "${AGNOSTICOS_BASE}"
+  sudo chown "$(id -u):$(id -g)" "${AGNOSTICOS_BASE}"
+fi
 
 # Ensure boot directory exists
-mkdir -p "${BOOT_DIR}"
+if ! mkdir -p "${BOOT_DIR}" 2>/dev/null; then
+  sudo mkdir -p "${BOOT_DIR}"
+  sudo chown "$(id -u):$(id -g)" "${BOOT_DIR}"
+fi
 
 # Detect host kernel
 KERNEL_SRC=""
