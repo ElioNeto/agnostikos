@@ -122,12 +122,29 @@ func createinitramfs(output string, testMode bool) error {
 	defer os.RemoveAll(initDir)
 
 	if testMode {
-		// Initramfs mínimo de teste: auto-contido, sem busybox.
+		// Initramfs mínimo de teste: inclui busybox estático para o shell.
 		// Monta VFS, imprime "Welcome to Agnostikos" e desliga.
-		for _, d := range []string{"dev", "proc", "sys"} {
+		for _, d := range []string{"bin", "dev", "proc", "sys"} {
 			if err := os.MkdirAll(filepath.Join(initDir, d), 0755); err != nil {
 				return fmt.Errorf("mkdir %s: %w", d, err)
 			}
+		}
+		// Copia busybox do host para o initramfs (precisa ser estático)
+		busyboxPath, err := exec.LookPath("busybox")
+		if err != nil {
+			return fmt.Errorf("busybox not found on host — required for test initramfs: %w", err)
+		}
+		bbData, err := os.ReadFile(busyboxPath)
+		if err != nil {
+			return fmt.Errorf("read busybox binary: %w", err)
+		}
+		bbDest := filepath.Join(initDir, "bin", "busybox")
+		if err := os.WriteFile(bbDest, bbData, 0755); err != nil {
+			return fmt.Errorf("write busybox: %w", err)
+		}
+		// Symlink bin/sh → busybox (busybox detecta argv[0] e age como shell)
+		if err := os.Symlink("busybox", filepath.Join(initDir, "bin", "sh")); err != nil {
+			return fmt.Errorf("symlink bin/sh: %w", err)
 		}
 		init := `#!/bin/sh
 mount -t proc none /proc

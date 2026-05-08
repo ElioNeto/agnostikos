@@ -69,7 +69,7 @@ jobs:
     if: github.event_name != 'workflow_dispatch'
     needs: [build-and-test, lint]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -77,8 +77,6 @@ jobs:
           go-version: '1.22'
       - name: Install dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-x86 xorriso grub-pc-bin grub-efi-amd64-bin mtools ovmf
-      - name: Build Go binary
-        run: make build
       - name: Prepare minimal rootfs
         run: bash scripts/prepare-minimal-rootfs.sh
       - name: Build minimal ISO

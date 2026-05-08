@@ -87,5 +87,5 @@ echo "  make minimal-iso"
 echo "  make minimal-iso ARGS=\"--kernel-version ${KERNEL_VERSION}\""
 echo ""
 
-# Export the minimal root path for easy use
-echo "MINIMAL_ROOT=${MINIMAL_ROOT}"
+# Print the minimal root path for reference
+echo -e "${GREEN}[prepare-minimal-rootfs]${NO_COLOR} Minimal rootfs path: ${MINIMAL_ROOT}"

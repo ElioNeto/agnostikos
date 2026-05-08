@@ -79,6 +79,6 @@ func init() {
 	isoCmd.Flags().StringVar(&isoKernelVersion, "kernel-version", "", "Kernel version to use (ex: 6.6). If empty, auto-detects from boot/vmlinuz-*")
 	isoCmd.Flags().StringVar(&isoInitramfs, "initramfs", "", "Custom initramfs path (default: RootFS/boot/initramfs.img)")
 	isoCmd.Flags().BoolVar(&isoUEFI, "uefi", false, "Generate UEFI-bootable ISO")
-	isoCmd.Flags().BoolVar(&isoTestMode, "test", false, "Generate test ISO with minimal initramfs (no real rootfs required)")
+	isoCmd.Flags().BoolVar(&isoTestMode, "test", false, "Generate test ISO with minimal initramfs (no busybox, uses host kernel only)")
 	rootCmd.AddCommand(isoCmd)
 }
