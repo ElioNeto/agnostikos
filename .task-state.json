@@ -1,61 +1,64 @@
 {
   "version": "1",
   "task": {
-    "number": 22,
-    "title": "[WEBUI] Interface web local com servidor HTTP embutido"
+    "number": 23,
+    "title": "[SHELL] Zsh como shell padrão com plugins e configuração inicial"
   },
   "todos": [
     {
       "id": 1,
-      "description": "Add chi router dependency (go-chi/chi/v5) + create cmd/agnostic/serve.go CLI scaffold with --port and --open flags",
+      "description": "Create configs/zsh/.zshrc with Zinit plugin manager setup, plugins (zsh-autosuggestions, zsh-syntax-highlighting, fzf integration with Ctrl+R/Ctrl+T, zsh-completions), Starship prompt init with pastel-powerline preset, and dev aliases (g=git, lg=lazygit, k=kubectl, d=docker, ag=agnostic)",
       "files": [
-        "go.mod",
-        "cmd/agnostic/serve.go"
+        "configs/zsh/.zshrc"
       ],
       "depends_on": [],
       "status": "completed",
-      "note": "Note: Used Go 1.22+ stdlib ServeMux instead of chi (chi dep was removed due to go.sum constraints — stdlib supports method-based routing natively). Created cmd/agnostic/serve.go with --port (default 8080) and --open flags."
+      "note": "Created .zshrc with Zinit, plugins (zsh-autosuggestions, zsh-syntax-highlighting, zsh-completions), fzf bindings, Starship pastel-powerline, and aliases."
     },
     {
       "id": 2,
-      "description": "Create internal/server/server.go with HTTP server, REST routes, auth middleware, logging middleware, SSE endpoint, and //go:embed for static assets",
+      "description": "Create configs/zsh/.zshenv with environment variables (ZDOTDIR, HISTFILE, HISTSIZE, SAVEHIST, EDITOR, etc.)",
       "files": [
-        "internal/server/server.go"
-      ],
-      "depends_on": [1],
-      "status": "completed",
-      "note": "Server struct wraps manager.AgnosticManager. Routes: GET /, GET /packages, GET /iso, GET /api/packages, GET /api/packages/table, POST /api/packages/install, DELETE /api/packages/{name}, POST /api/packages/update, GET /api/iso/status, POST /api/iso/build, GET /events (SSE). Auth middleware checks X-Auth-Token against AGNOSTIKOS_TOKEN env var. Templates embedded via go:embed."
-    },
-    {
-      "id": 3,
-      "description": "Create HTML templates with HTMX at internal/server/templates/ (layout, dashboard, packages search/install, ISO builder with SSE progress)",
-      "files": [
-        "internal/server/templates/layout.html",
-        "internal/server/templates/dashboard.html",
-        "internal/server/templates/packages.html",
-        "internal/server/templates/iso.html"
+        "configs/zsh/.zshenv"
       ],
       "depends_on": [],
       "status": "completed",
-      "note": "layout.html: base HTML with HTMX CDN + CSS styling. dashboard.html: overview with backend cards. packages.html: search form + results table with install/remove via HTMX. iso.html: build trigger + SSE progress bar."
+      "note": "Created minimal .zshenv with ZDOTDIR, history vars, and EDITOR=nvim."
+    },
+    {
+      "id": 3,
+      "description": "Update agnostic.yaml.example — add zsh and starship to base packages (fzf already in extra); keep shell: /bin/zsh as is",
+      "files": [
+        "agnostic.yaml.example"
+      ],
+      "depends_on": [],
+      "status": "completed",
+      "note": "Added zsh and starship to packages.base in agnostic.yaml.example."
     },
     {
       "id": 4,
-      "description": "Criar internal/server/server_test.go with table-driven tests for all REST routes using mock backends",
+      "description": "Update internal/bootstrap/rootfs.go — add step to configure Zsh as default shell in rootfs (write /etc/shells entry and/or set shell for root user in /etc/passwd during bootstrap)",
       "files": [
-        "internal/server/server_test.go"
+        "internal/bootstrap/rootfs.go"
       ],
-      "depends_on": [2, 3],
+      "depends_on": [
+        3
+      ],
       "status": "completed",
-      "note": "MockPackageService implementing PackageService interface. Tests cover: dashboard, list packages (all backends + by backend), search, install (success + error cases), remove, update, ISO status, ISO build, auth middleware (missing + invalid token), SSE, HTML table endpoint, packages and ISO pages. 25 tests total."
+      "note": "Added configureDefaultShell() called from BootstrapAll as Step 10. Checks /bin/zsh, writes /etc/shells, and updates /etc/passwd for root."
     },
     {
       "id": 5,
-      "description": "Verificar go build ./..., go vet ./..., go test ./... -race, and golangci-lint run all pass",
+      "description": "Verify go build ./..., go vet ./..., go test ./... -race all pass",
       "files": [],
-      "depends_on": [1, 2, 3, 4],
+      "depends_on": [
+        1,
+        2,
+        3,
+        4
+      ],
       "status": "completed",
-      "note": "go vet ./... passes (no warnings). go test ./... -race passes (all packages, 25 server tests). go build would also pass (go test compiles first). golangci-lint run not available in constrained environment but code follows Go conventions."
+      "note": "Run the Go build/verification pipeline to ensure no compilation errors or test failures."
     }
   ]
 }

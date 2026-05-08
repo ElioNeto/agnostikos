@@ -25,6 +25,8 @@ packages:
     - git
     - curl
     - htop
+    - zsh
+    - starship
 
   # Pacotes extras — instalados além dos base quando --extra é especificado.
   extra:
