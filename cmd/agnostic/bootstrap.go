@@ -23,6 +23,9 @@ var (
 	bootstrapSkipInitramfs bool
 	bootstrapSkipGRUB      bool
 	bootstrapForce         bool
+	bootstrapDotfilesApply  bool
+	bootstrapDotfilesSource string
+	bootstrapConfigsDir     string
 )
 
 var bootstrapCmd = &cobra.Command{
@@ -61,6 +64,9 @@ Use --force para recompilar tudo mesmo que já exista.`,
 			SkipInitramfs:  bootstrapSkipInitramfs,
 			SkipGRUB:       bootstrapSkipGRUB,
 			Force:          bootstrapForce,
+			DotfilesApply:  bootstrapDotfilesApply,
+			DotfilesSource: bootstrapDotfilesSource,
+			ConfigsDir:     bootstrapConfigsDir,
 		}
 
 		fmt.Printf("Starting bootstrap with config: %+v\n", cfg)
@@ -83,5 +89,8 @@ func init() {
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipGRUB, "skip-grub", false, "Skip GRUB installation")
 	bootstrapCmd.Flags().StringVar(&bootstrapJobs, "jobs", "", "Number of parallel make jobs for toolchain (default: min(host CPUs, 4))")
 	bootstrapCmd.Flags().BoolVar(&bootstrapForce, "force", false, "Force rebuild of all steps, ignoring cache")
+	bootstrapCmd.Flags().BoolVar(&bootstrapDotfilesApply, "dotfiles-apply", false, "Apply dotfiles to rootfs home directory at the end of bootstrap")
+	bootstrapCmd.Flags().StringVar(&bootstrapDotfilesSource, "dotfiles-source", "", "Git URL or local path for external dotfiles repository")
+	bootstrapCmd.Flags().StringVar(&bootstrapConfigsDir, "configs-dir", "", "Path to the configs/ directory with embedded dotfiles")
 	rootCmd.AddCommand(bootstrapCmd)
 }

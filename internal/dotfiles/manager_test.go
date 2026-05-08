@@ -2,7 +2,9 @@ package dotfiles
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -293,6 +295,93 @@ func TestApply_MissingSource_DoesNotError(t *testing.T) {
 	if err := mgr.Apply(configsDir, homeDir, false); err != nil {
 		t.Fatalf("Apply() with missing sources returned error: %v", err)
 	}
+}
+
+func TestApply_ExternalGitClone(t *testing.T) {
+	// Create a temporary fake git repository with dotfiles at root level
+	// (because Apply() uses the clone root as configsDir when From is set).
+	repoDir := t.TempDir()
+
+	// Create a dotfile directly in the repo (will be at repoDir/git/.gitconfig)
+	dotfileRel := "git/.gitconfig"
+	dotfileContent := "[user]\n\tname = GitCloneTest\n"
+	absDotfile := filepath.Join(repoDir, dotfileRel)
+	if err := os.MkdirAll(filepath.Dir(absDotfile), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(absDotfile, []byte(dotfileContent), 0644); err != nil {
+		t.Fatalf("write dotfile: %v", err)
+	}
+
+	// Initialize git repo
+	if err := runGit(repoDir, "init", "-b", "main"); err != nil {
+		t.Fatalf("git init: %v", err)
+	}
+	// Configure a known committer for the test environment
+	_ = runGit(repoDir, "config", "user.email", "test@agnostikos.local")
+	_ = runGit(repoDir, "config", "user.name", "AgnosticOS Test")
+	// Add and commit
+	if err := runGit(repoDir, "add", "."); err != nil {
+		t.Fatalf("git add: %v", err)
+	}
+	if err := runGit(repoDir, "commit", "-m", "initial dotfiles"); err != nil {
+		t.Fatalf("git commit: %v", err)
+	}
+
+	t.Run("apply from external git clone source", func(t *testing.T) {
+		configsDir := filepath.Join(t.TempDir(), "configs")
+		homeDir := filepath.Join(t.TempDir(), "home")
+
+		// Create a manager with the git repo path as the "external source"
+		mgr := New(repoDir)
+		if err := mgr.Apply(configsDir, homeDir, false); err != nil {
+			t.Fatalf("Apply() returned error: %v", err)
+		}
+
+		// Verify the dotfile was symlinked correctly
+		linkPath := filepath.Join(homeDir, ".gitconfig")
+		fi, err := os.Lstat(linkPath)
+		if err != nil {
+			t.Fatalf("expected symlink %s to exist: %v", linkPath, err)
+		}
+		if fi.Mode()&os.ModeSymlink == 0 {
+			t.Fatalf("%s is not a symlink", linkPath)
+		}
+
+		target, err := os.Readlink(linkPath)
+		if err != nil {
+			t.Fatalf("readlink %s: %v", linkPath, err)
+		}
+		// The symlink should be relative and point to a file that exists
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(linkPath), target)
+		}
+		targetAbs, err := filepath.Abs(target)
+		if err != nil {
+			t.Fatalf("abs target: %v", err)
+		}
+		// Verify the target is a real file with the expected content
+		data, err := os.ReadFile(targetAbs)
+		if err != nil {
+			t.Fatalf("read target %s: %v", targetAbs, err)
+		}
+		if string(data) != dotfileContent {
+			t.Errorf("expected content %q, got %q", dotfileContent, string(data))
+		}
+		// Verify the target is under the configsDir tree (was cloned)
+		if !strings.HasPrefix(targetAbs, configsDir) {
+			t.Errorf("expected target %s to be under configsDir %s", targetAbs, configsDir)
+		}
+	})
+}
+
+// runGit executes a git command in the given directory.
+func runGit(dir string, args ...string) error {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	return cmd.Run()
 }
 
 // contains is a helper to check if a string contains a substring.
