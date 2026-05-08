@@ -106,7 +106,7 @@ poweroff -f
 		// Estes são os comandos disponíveis no shell interativo de resgate.
 		applets := []string{
 			"sh", "mount", "poweroff", "sleep", "reboot", "halt",
-			"dmesg", "cat", "echo",
+			"dmesg", "cat", "echo", "udhcpc",
 			// Navegação e arquivos
 			"ls", "cd", "pwd", "cp", "mv", "rm", "mkdir", "rmdir", "touch",
 			"ln", "find", "grep", "sed", "awk", "more", "less", "head", "tail",

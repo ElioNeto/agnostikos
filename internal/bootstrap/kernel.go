@@ -9,6 +9,15 @@ import (
 	"strings"
 )
 
+// kernelConfigFragment is a minimal kernel config fragment that enables essential
+// features for a bootable initramfs-based system: initrd, devtmpfs, serial console, ext4.
+const kernelConfigFragment = `CONFIG_BLK_DEV_INITRD=y
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
+CONFIG_SERIAL_8250_CONSOLE=y
+CONFIG_EXT4_FS=y
+`
+
 // KernelConfig contém os parâmetros de compilação do kernel
 type KernelConfig struct {
 	Version    string // ex: "6.8.0"
@@ -41,6 +50,29 @@ func autoDetectArch(cfg KernelConfig) string {
 	default:
 		return "amd64"
 	}
+}
+
+// applyKernelConfigFragment writes a minimal config fragment and merges it into
+// the kernel .config using scripts/kconfig/merge_config.sh.
+func applyKernelConfigFragment(srcPath, karch string) error {
+	fragmentPath := filepath.Join(srcPath, "kernel-config-minimal.config")
+	if err := os.WriteFile(fragmentPath, []byte(kernelConfigFragment), 0644); err != nil {
+		return fmt.Errorf("write config fragment: %w", err)
+	}
+	fmt.Printf("[kernel] Applying kernel config fragment (%s)...\n", fragmentPath)
+
+	// Run merge_config.sh directly (not via make) since it's a shell script,
+	// not a make target. -m means "only merge, don't run olddefconfig",
+	// -O specifies the output directory for the merged .config.
+	cmd := exec.Command("sh", "-c",
+		fmt.Sprintf("cd %s && ARCH=%s scripts/kconfig/merge_config.sh -m -O %s %s %s",
+			srcPath, karch, srcPath,
+			filepath.Join(srcPath, ".config"), fragmentPath))
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("merge config fragment: %w", err)
+	}
+	return nil
 }
 
 // BuildKernel automatiza download, configuração e compilação do Linux kernel
@@ -93,6 +125,11 @@ func BuildKernel(cfg KernelConfig) error {
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("defconfig: %w", err)
+	}
+
+	// 4b. Apply minimal kernel config fragment
+	if err := applyKernelConfigFragment(srcPath, karch); err != nil {
+		return fmt.Errorf("apply config fragment: %w", err)
 	}
 
 	// 5. Compile (parallel)

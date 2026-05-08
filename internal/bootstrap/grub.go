@@ -90,7 +90,7 @@ func InstallGRUB(ctx context.Context, cfg GRUBConfig) error {
 set default=0
 
 menuentry "Agnostikos Linux" {
-  linux /boot/vmlinuz root=/dev/ram0 quiet
+  linux /boot/vmlinuz root=/dev/ram0 console=ttyS0,115200
   initrd /boot/initramfs.img
 }
 `

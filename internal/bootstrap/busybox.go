@@ -66,13 +66,22 @@ func BuildBusybox(ctx context.Context, cfg BusyboxConfig) error {
 	// 3b. Patch .config:
 	//   - Disable CONFIG_TC (incompatible with kernel >= 6.1)
 	//   - Enable CONFIG_STATIC for fully static binary (no runtime lib deps)
+	//   - Enable CONFIG_UDHCPC for DHCP client in initramfs
+	//   - Enable CONFIG_IP for network configuration
 	dotConfig := filepath.Join(busyboxDir, ".config")
-	fmt.Println("[busybox] Patching .config: disabling CONFIG_TC, enabling CONFIG_STATIC...")
+	fmt.Println("[busybox] Patching .config: disabling CONFIG_TC, enabling CONFIG_STATIC, UDHCPC...")
 	patchCmd := exec.CommandContext(ctx, "sed", "-i",
 		"-e", "s/^CONFIG_TC=y/CONFIG_TC=n/",
 		"-e", "s/^CONFIG_FEATURE_TC_INGRESS=y/CONFIG_FEATURE_TC_INGRESS=n/",
 		"-e", "s/^# CONFIG_STATIC is not set/CONFIG_STATIC=y/",
 		"-e", "s/^CONFIG_STATIC=n/CONFIG_STATIC=y/",
+		"-e", "s/^# CONFIG_UDHCPC is not set/CONFIG_UDHCPC=y/",
+		"-e", "s/^CONFIG_UDHCPC=n/CONFIG_UDHCPC=y/",
+		"-e", "s/^CONFIG_UDHCPC_DEBUG=y/CONFIG_UDHCPC_DEBUG=n/",
+		"-e", "s/^# CONFIG_FEATURE_UDHCPC_ARPING is not set/CONFIG_FEATURE_UDHCPC_ARPING=y/",
+		"-e", "s/^CONFIG_FEATURE_UDHCPC_ARPING=n/CONFIG_FEATURE_UDHCPC_ARPING=y/",
+		"-e", "s/^# CONFIG_IP is not set/CONFIG_IP=y/",
+		"-e", "s/^CONFIG_IP=n/CONFIG_IP=y/",
 		dotConfig,
 	)
 	patchCmd.Stdout, patchCmd.Stderr = os.Stdout, os.Stderr
@@ -81,15 +90,17 @@ func BuildBusybox(ctx context.Context, cfg BusyboxConfig) error {
 	}
 	// If CONFIG_STATIC line didn't exist in .config, add it
 	// (check if the sed already enabled it; if not, append)
-	needsAppend, err := exec.CommandContext(ctx, "sh", "-c",
-		fmt.Sprintf("grep -q '^CONFIG_STATIC=y' %s || echo need_append", dotConfig)).CombinedOutput()
-	if err == nil && string(needsAppend) == "need_append\n" {
-		fmt.Println("[busybox] CONFIG_STATIC not in .config, appending...")
-		appendCmd := exec.CommandContext(ctx, "sh", "-c",
-			fmt.Sprintf("echo 'CONFIG_STATIC=y' >> %s", dotConfig))
-		appendCmd.Stdout, appendCmd.Stderr = os.Stdout, os.Stderr
-		if err := appendCmd.Run(); err != nil {
-			return fmt.Errorf("busybox append CONFIG_STATIC: %w", err)
+	for _, opt := range []string{"CONFIG_STATIC=y", "CONFIG_UDHCPC=y", "CONFIG_FEATURE_UDHCPC_ARPING=y", "CONFIG_IP=y"} {
+		needsAppend, err := exec.CommandContext(ctx, "sh", "-c",
+			fmt.Sprintf("grep -q '^%s' %s || echo need_append", opt, dotConfig)).CombinedOutput()
+		if err == nil && string(needsAppend) == "need_append\n" {
+			fmt.Printf("[busybox] %s not in .config, appending...\n", opt)
+			appendCmd := exec.CommandContext(ctx, "sh", "-c",
+				fmt.Sprintf("echo '%s' >> %s", opt, dotConfig))
+			appendCmd.Stdout, appendCmd.Stderr = os.Stdout, os.Stderr
+			if err := appendCmd.Run(); err != nil {
+				return fmt.Errorf("busybox append %s: %w", opt, err)
+			}
 		}
 	}
 

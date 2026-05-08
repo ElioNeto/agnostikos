@@ -61,6 +61,8 @@ func TestDownloadToolchain_SkipsExisting(t *testing.T) {
 	}
 	defer os.RemoveAll(tmp)
 
+	// Estrutura de diretórios real: rootfs/ e sources/ ficam no mesmo base dir
+	rootfsDir := filepath.Join(tmp, "rootfs")
 	sourcesDir := filepath.Join(tmp, "sources")
 	if err := os.MkdirAll(sourcesDir, 0755); err != nil {
 		t.Fatalf("failed to create sourcesDir: %v", err)
@@ -75,7 +77,7 @@ func TestDownloadToolchain_SkipsExisting(t *testing.T) {
 	}
 
 	// como todos já existem, não deve tentar baixar nada (sem rede)
-	if err := DownloadToolchain(tmp); err != nil {
+	if err := DownloadToolchain(rootfsDir); err != nil {
 		t.Errorf("expected no error when files exist, got: %v", err)
 	}
 }

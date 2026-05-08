@@ -57,6 +57,12 @@ TEST_ISO_TIMEOUT ?= 300
 test-iso-headless: ## Test ISO in QEMU (headless, for CI)
 	HEADLESS=1 BOOT_TIMEOUT=$(TEST_ISO_TIMEOUT) bash scripts/run-qemu.sh $(BUILD_DIR)/agnostikos-latest.iso
 
+test-boot-integration: build ## Run full boot integration test (bootstrap → ISO → QEMU)
+	@bash scripts/test-boot-integration.sh --timeout $(TEST_ISO_TIMEOUT)
+
+test-boot-integration-uefi: build ## Run full boot integration test (UEFI mode)
+	@bash scripts/test-boot-integration.sh --uefi --timeout $(TEST_ISO_TIMEOUT)
+
 lint: ## Run golangci-lint
 	golangci-lint run ./...
 

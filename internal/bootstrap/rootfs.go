@@ -71,13 +71,14 @@ func resolveTarget(target string) string {
 	return DefaultRoot
 }
 
-// sourcesDir retorna /mnt/data/agnostikOS/sources (ou base derivado de AGNOSTICOS_ROOT)
+// sourcesDir retorna /mnt/data/agnostikOS/sources (ou base derivado de rootfsDir)
 func sourcesDir(rootfsDir string) string {
 	base := BaseDir
-	if v := os.Getenv("AGNOSTICOS_ROOT"); v != "" {
+	if rootfsDir != "" && rootfsDir != DefaultRoot {
+		base = filepath.Dir(rootfsDir)
+	} else if v := os.Getenv("AGNOSTICOS_ROOT"); v != "" {
 		base = filepath.Dir(v)
 	}
-	_ = rootfsDir
 	return filepath.Join(base, "sources")
 }
 

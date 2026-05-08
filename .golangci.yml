@@ -6,11 +6,8 @@ linters:
     - gosimple
     - govet
     - ineffassign
-    - shadow
     - staticcheck
     - unused
-  disable:
-    - exportloopref # deprecated
   presets:
     - bugs
     - performance

@@ -41,8 +41,8 @@ func TestInstallGRUB_CreatesGrubCfg(t *testing.T) {
 	if !strings.Contains(content, `menuentry "Agnostikos Linux"`) {
 		t.Error("grub.cfg missing menuentry")
 	}
-	if !strings.Contains(content, "linux /boot/vmlinuz root=/dev/ram0 quiet") {
-		t.Error("grub.cfg missing linux line")
+	if !strings.Contains(content, "linux /boot/vmlinuz root=/dev/ram0 console=ttyS0,115200") {
+		t.Error("grub.cfg missing linux line with serial console")
 	}
 	if !strings.Contains(content, "initrd /boot/initramfs.img") {
 		t.Error("grub.cfg missing initrd line")
@@ -167,7 +167,7 @@ func TestInstallGRUB_GrubCfgContent(t *testing.T) {
 		"set timeout=5",
 		"set default=0",
 		"menuentry \"Agnostikos Linux\"",
-		"linux /boot/vmlinuz root=/dev/ram0 quiet",
+		"linux /boot/vmlinuz root=/dev/ram0 console=ttyS0,115200",
 		"initrd /boot/initramfs.img",
 	}
 	for _, part := range expectedParts {
