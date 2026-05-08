@@ -72,8 +72,8 @@ if [ -f "$DEST_KERNEL" ]; then
   echo -e "${YELLOW}[prepare-minimal-rootfs]${NO_COLOR} Kernel already exists at ${DEST_KERNEL}, skipping copy"
 else
   echo -e "${GREEN}[prepare-minimal-rootfs]${NO_COLOR} Copying kernel to ${DEST_KERNEL}"
-  cp -f "$KERNEL_SRC" "$DEST_KERNEL"
-  chmod 644 "$DEST_KERNEL"
+  sudo cp -f "$KERNEL_SRC" "$DEST_KERNEL"
+  sudo chmod 644 "$DEST_KERNEL"
 fi
 
 # Verify the kernel was placed correctly
