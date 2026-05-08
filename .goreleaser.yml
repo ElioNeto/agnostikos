@@ -38,6 +38,7 @@ brews:
     repository:
       owner: ElioNeto
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: https://github.com/ElioNeto/agnostikos
     description: "Meta-wrapper package manager for Pacman, Nix, and Flatpak"
     license: "MIT"
