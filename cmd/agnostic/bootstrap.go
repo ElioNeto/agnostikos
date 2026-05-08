@@ -1,3 +1,4 @@
+// Package agnostic implements the CLI commands for the AgnosticOS build system.
 package agnostic
 
 import (

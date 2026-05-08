@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,17 +12,17 @@ import (
 // BuildInitramfs cria um initramfs com /init script e empacota com cpio | gzip
 func BuildInitramfs(ctx context.Context, rootfsDir, outputPath string) error {
 	if rootfsDir == "" {
-		return fmt.Errorf("rootfs directory is required")
+		return errors.New("rootfs directory is required")
 	}
 	if outputPath == "" {
-		return fmt.Errorf("output path is required")
+		return errors.New("output path is required")
 	}
 
 	initDir, err := os.MkdirTemp("", "initramfs-*")
 	if err != nil {
 		return fmt.Errorf("create temp dir: %w", err)
 	}
-	defer os.RemoveAll(initDir)
+	defer func() { _ = os.RemoveAll(initDir) }()
 
 	// Criar diretórios essenciais
 	for _, d := range []string{"bin", "dev", "etc", "proc", "sys", "mnt/root"} {

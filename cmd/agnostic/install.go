@@ -1,6 +1,7 @@
 package agnostic
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -59,7 +60,7 @@ Otherwise, install a single package specified as argument.`,
 
 		// Fallback: install a single package from args
 		if len(args) == 0 {
-			return fmt.Errorf("requires a package name argument or --config flag")
+			return errors.New("requires a package name argument or --config flag")
 		}
 
 		mgr := manager.NewAgnosticManager()

@@ -1,3 +1,4 @@
+// Package manager provides package management through multiple backends (pacman, nix, flatpak).
 package manager
 
 import (

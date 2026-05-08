@@ -1,3 +1,4 @@
+// Package tui provides the terminal UI for the AgnosticOS package manager.
 package tui
 
 import (
@@ -323,7 +324,7 @@ func (m Model) backendListView() string {
 		cursor := "  "
 		line := fmt.Sprintf("%s%s", cursor, backend)
 		if i == m.cursor {
-			line = selectedStyle.Render(fmt.Sprintf("> %s", backend))
+			line = selectedStyle.Render("> " + backend)
 		}
 		b.WriteString(line)
 		b.WriteString("\n")
@@ -339,26 +340,27 @@ func (m Model) backendListView() string {
 func (m Model) searchView() string {
 	var b strings.Builder
 	backend := m.backends[m.cursor]
-	b.WriteString(titleStyle.Render(fmt.Sprintf("Searching in: %s", backend)))
+	b.WriteString(titleStyle.Render("Searching in: " + backend))
 	b.WriteString("\n\n")
 	b.WriteString(m.searchInput.View())
 	b.WriteString("\n")
 
-	if m.loading {
-		b.WriteString(fmt.Sprintf("\n  %s Searching...\n", m.spinner.View()))
-	} else if m.searchErr != nil {
+	switch {
+	case m.loading:
+		fmt.Fprintf(&b, "\n  %s Searching...\n", m.spinner.View())
+	case m.searchErr != nil:
 		b.WriteString(errorStyle.Render(fmt.Sprintf("\nError: %s\n", m.searchErr)))
-	} else if len(m.searchResults) > 0 {
-		b.WriteString(fmt.Sprintf("\nResults (%d):\n\n", len(m.searchResults)))
+	case len(m.searchResults) > 0:
+		fmt.Fprintf(&b, "\nResults (%d):\n\n", len(m.searchResults))
 		for i, result := range m.searchResults {
-			line := fmt.Sprintf("  %s", result)
+			line := "  " + result
 			if i == m.searchCursor {
-				line = selectedStyle.Render(fmt.Sprintf("> %s", result))
+				line = selectedStyle.Render("> " + result)
 			}
 			b.WriteString(line)
 			b.WriteString("\n")
 		}
-	} else if m.searchInput.Value() != "" {
+	case m.searchInput.Value() != "":
 		b.WriteString("\nPress Enter to search...\n")
 	}
 
@@ -374,16 +376,17 @@ func (m Model) packageDetailView() string {
 	backend := m.backends[m.cursor]
 	b.WriteString(titleStyle.Render("Package Detail"))
 	b.WriteString("\n\n")
-	b.WriteString(fmt.Sprintf("Package: %s\n", m.selectedPkg))
-	b.WriteString(fmt.Sprintf("Backend: %s\n", backend))
+	fmt.Fprintf(&b, "Package: %s\n", m.selectedPkg)
+	fmt.Fprintf(&b, "Backend: %s\n", backend)
 	b.WriteString("\n")
 
-	if m.loading {
-		b.WriteString(fmt.Sprintf("\n  %s Working...\n", m.spinner.View()))
-	} else if m.actionErr != nil {
-		b.WriteString(errorStyle.Render(fmt.Sprintf("%s\n\n", m.statusMsg)))
-	} else if m.statusMsg != "" {
-		b.WriteString(successStyle.Render(fmt.Sprintf("%s\n\n", m.statusMsg)))
+	switch {
+	case m.loading:
+		fmt.Fprintf(&b, "\n  %s Working...\n", m.spinner.View())
+	case m.actionErr != nil:
+		b.WriteString(errorStyle.Render(m.statusMsg + "\n\n"))
+	case m.statusMsg != "":
+		b.WriteString(successStyle.Render(m.statusMsg + "\n\n"))
 	}
 
 	b.WriteString("[i] Install  [r] Remove\n")

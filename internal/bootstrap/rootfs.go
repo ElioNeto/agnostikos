@@ -113,7 +113,7 @@ func CreateRootFS(target string) error {
 		filepath.Join(target, "var/run"): "../run",
 	}
 	for link, dest := range symlinks {
-		os.Remove(link)
+		_ = os.Remove(link)
 		if err := os.Symlink(dest, link); err != nil {
 			fmt.Printf("[rootfs] warn: symlink %s -> %s: %v\n", link, dest, err)
 		}
@@ -147,11 +147,15 @@ func DownloadToolchain(rootfsDir string) error {
 
 // downloadFile faz o download de uma URL para um arquivo local
 func downloadFile(dest, url string) error {
-	resp, err := http.Get(url) //nolint:gosec
+	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("http get: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status: %s", resp.Status)
 	}
@@ -159,7 +163,7 @@ func downloadFile(dest, url string) error {
 	if err != nil {
 		return fmt.Errorf("create file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if _, err := io.Copy(f, resp.Body); err != nil {
 		return fmt.Errorf("write file: %w", err)
 	}
@@ -184,7 +188,7 @@ func mountVirtualFS(target string) error {
 			args = append(args, "-o", m.opts)
 		}
 		args = append(args, m.source, m.target)
-		if out, err := exec.Command("mount", args...).CombinedOutput(); err != nil {
+		if out, err := exec.CommandContext(context.Background(), "mount", args...).CombinedOutput(); err != nil {
 			fmt.Printf("[rootfs] warn: mount %s: %s\n", m.fstype, string(out))
 		} else {
 			fmt.Printf("[rootfs] mounted %s -> %s\n", m.fstype, m.target)
@@ -196,7 +200,7 @@ func mountVirtualFS(target string) error {
 // UnmountVirtualFS desmonta os filesystems virtuais do chroot
 func UnmountVirtualFS(target string) error {
 	for _, p := range []string{"dev/pts", "dev", "run", "proc", "sys"} {
-		_ = exec.Command("umount", filepath.Join(target, p)).Run()
+		_ = exec.CommandContext(context.Background(), "umount", filepath.Join(target, p)).Run()
 	}
 	return nil
 }

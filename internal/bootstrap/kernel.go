@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -64,7 +65,7 @@ func applyKernelConfigFragment(srcPath, karch string) error {
 	// Run merge_config.sh directly (not via make) since it's a shell script,
 	// not a make target. -m means "only merge, don't run olddefconfig",
 	// -O specifies the output directory for the merged .config.
-	cmd := exec.Command("sh", "-c",
+	cmd := exec.CommandContext(context.Background(), "sh", "-c",
 		fmt.Sprintf("cd %s && ARCH=%s scripts/kconfig/merge_config.sh -m -O %s %s %s",
 			srcPath, karch, srcPath,
 			filepath.Join(srcPath, ".config"), fragmentPath))
@@ -96,7 +97,7 @@ func BuildKernel(cfg KernelConfig) error {
 	if _, err := os.Stat(tarballPath); os.IsNotExist(err) {
 		url := fmt.Sprintf("https://cdn.kernel.org/pub/linux/kernel/v%s.x/%s", major, tarball)
 		fmt.Printf("[kernel] Downloading Linux %s...\n", cfg.Version)
-		cmd := exec.Command("wget", "-q", "--show-progress", "-O", tarballPath, url)
+		cmd := exec.CommandContext(context.Background(), "wget", "-q", "--show-progress", "-O", tarballPath, url)
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("download: %w", err)
@@ -106,7 +107,7 @@ func BuildKernel(cfg KernelConfig) error {
 	// 2. Extract
 	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
 		fmt.Println("[kernel] Extracting tarball...")
-		cmd := exec.Command("tar", "-xf", tarballPath, "-C", cfg.SourcesDir)
+		cmd := exec.CommandContext(context.Background(), "tar", "-xf", tarballPath, "-C", cfg.SourcesDir)
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("extract: %w", err)
@@ -114,14 +115,14 @@ func BuildKernel(cfg KernelConfig) error {
 	}
 
 	// 3. mrproper (best-effort: ignora erro)
-	_ = exec.Command("make", "-C", srcPath, "mrproper").Run()
+	_ = exec.CommandContext(context.Background(), "make", "-C", srcPath, "mrproper").Run()
 
 	// 4. defconfig — use cfg.Defconfig if set, otherwise auto-detect from arch
 	if cfg.Defconfig == "" {
 		cfg.Defconfig = defconfig
 	}
 	fmt.Printf("[kernel] Applying %s (arch: %s)...\n", cfg.Defconfig, arch)
-	cmd := exec.Command("make", "-C", srcPath, "ARCH="+karch, cfg.Defconfig)
+	cmd := exec.CommandContext(context.Background(), "make", "-C", srcPath, "ARCH="+karch, cfg.Defconfig)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("defconfig: %w", err)
@@ -136,7 +137,7 @@ func BuildKernel(cfg KernelConfig) error {
 	imageTarget := filepath.Base(imageRelPath) // "bzImage" for x86, "Image" for arm64
 	jobs := fmt.Sprintf("-j%d", runtime.NumCPU())
 	fmt.Printf("[kernel] Compiling with %s (arch: %s, target: %s)...\n", jobs, arch, imageTarget)
-	cmd = exec.Command("make", "-C", srcPath, "ARCH="+karch, jobs, imageTarget, "modules")
+	cmd = exec.CommandContext(context.Background(), "make", "-C", srcPath, "ARCH="+karch, jobs, imageTarget, "modules")
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("compile: %w", err)
@@ -159,7 +160,7 @@ func BuildKernel(cfg KernelConfig) error {
 
 	// 7. Install modules (best-effort: ignora erro)
 	modPath := filepath.Dir(cfg.OutputDir)
-	cmd = exec.Command("make", "-C", srcPath, "ARCH="+karch, "INSTALL_MOD_PATH="+modPath, "modules_install")
+	cmd = exec.CommandContext(context.Background(), "make", "-C", srcPath, "ARCH="+karch, "INSTALL_MOD_PATH="+modPath, "modules_install")
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	_ = cmd.Run()
 

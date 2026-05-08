@@ -1,6 +1,8 @@
 package bootstrap
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -42,7 +44,7 @@ func findVmlinuz(rootfs, kernelVersion string) (string, error) {
 
 func GenerateISO(cfg ISOConfig) error {
 	if cfg.RootFS == "" || cfg.Output == "" {
-		return fmt.Errorf("RootFS and Output are required")
+		return errors.New("RootFS and Output are required")
 	}
 
 	isoTmpBase := tmpDir()
@@ -53,7 +55,7 @@ func GenerateISO(cfg ISOConfig) error {
 	if err != nil {
 		return fmt.Errorf("create work dir: %w", err)
 	}
-	defer os.RemoveAll(workDir)
+	defer func() { _ = os.RemoveAll(workDir) }()
 
 	isoDir := filepath.Join(workDir, "iso")
 	bootDir := filepath.Join(isoDir, "boot")
@@ -119,7 +121,7 @@ func createinitramfs(output string, testMode bool) error {
 	if err != nil {
 		return fmt.Errorf("create initramfs temp dir: %w", err)
 	}
-	defer os.RemoveAll(initDir)
+	defer func() { _ = os.RemoveAll(initDir) }()
 
 	if testMode {
 		// Initramfs mínimo de teste: inclui busybox estático para o shell.
@@ -178,7 +180,7 @@ exec switch_root /mnt/root /sbin/init
 		}
 	}
 
-	cmd := exec.Command("sh", "-c",
+	cmd := exec.CommandContext(context.Background(), "sh", "-c",
 		fmt.Sprintf("cd %s && find . | cpio -o -H newc | gzip > %s", initDir, output))
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("cpio: %w", err)
@@ -191,7 +193,7 @@ exec switch_root /mnt/root /sbin/init
 // necessária para boot OVMF.
 func runGrubMkrescue(isoDir string, cfg ISOConfig) error {
 	if _, err := exec.LookPath("grub-mkrescue"); err != nil {
-		return fmt.Errorf("grub-mkrescue not found — install grub-common and grub-efi-amd64-bin")
+		return errors.New("grub-mkrescue not found — install grub-common and grub-efi-amd64-bin")
 	}
 
 	label := cfg.BootLabel
@@ -206,7 +208,7 @@ func runGrubMkrescue(isoDir string, cfg ISOConfig) error {
 	}
 
 	fmt.Printf("[iso] running grub-mkrescue to create hybrid ISO: %s\n", cfg.Output)
-	cmd := exec.Command("grub-mkrescue", args...)
+	cmd := exec.CommandContext(context.Background(), "grub-mkrescue", args...)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("grub-mkrescue failed: %w", err)

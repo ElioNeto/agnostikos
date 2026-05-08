@@ -1,8 +1,11 @@
+// Package iso provides ISO image building utilities for AgnosticOS.
 package iso
 
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -46,7 +49,7 @@ func (b *ISOBuilder) detectTool() (string, error) {
 			return path, nil
 		}
 	}
-	return "", fmt.Errorf("no ISO creation tool found (tried xorrisofs, mkisofs, genisoimage); install libisoburn or genisoimage")
+	return "", errors.New("no ISO creation tool found (tried xorrisofs, mkisofs, genisoimage); install libisoburn or genisoimage")
 }
 
 // fileExists verifica se um arquivo existe
@@ -70,7 +73,7 @@ func sha256Checksum(path string) (string, error) {
 	if _, err := io.Copy(h, f); err != nil {
 		return "", fmt.Errorf("compute checksum: %w", err)
 	}
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // Build gera a ISO bootável a partir do RootFS
@@ -83,10 +86,10 @@ func (b *ISOBuilder) Build(ctx context.Context, rootfsPath, outputPath string) e
 	}
 
 	if rootfsPath == "" {
-		return fmt.Errorf("rootfs path is required")
+		return errors.New("rootfs path is required")
 	}
 	if outputPath == "" {
-		return fmt.Errorf("output path is required")
+		return errors.New("output path is required")
 	}
 
 	tool, err := b.detectTool()

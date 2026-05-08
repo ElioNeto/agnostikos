@@ -42,20 +42,6 @@ func newTestModel() Model {
 	return InitialModel(mgr)
 }
 
-// newErrorMockModel creates a Model where the backend returns errors.
-func newErrorMockModel() Model {
-	mgr := &manager.AgnosticManager{
-		Backends: map[string]manager.PackageService{
-			"pacman": &mockBackend{
-				searchErr: errors.New("search failed"),
-				installErr: errors.New("install failed"),
-				removeErr:  errors.New("remove failed"),
-			},
-		},
-	}
-	return InitialModel(mgr)
-}
-
 // sendKey sends a key press message to the model and returns the updated model.
 // Handles both regular rune keys and special key names ("up", "down").
 func sendKey(m Model, key string) Model {

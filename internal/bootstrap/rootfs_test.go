@@ -20,7 +20,7 @@ func TestResolveTarget_EnvVar(t *testing.T) {
 }
 
 func TestResolveTarget_Default(t *testing.T) {
-	os.Unsetenv("AGNOSTICOS_ROOT")
+	_ = os.Unsetenv("AGNOSTICOS_ROOT")
 	if got := resolveTarget(""); got != DefaultRoot {
 		t.Errorf("expected %s, got %s", DefaultRoot, got)
 	}
@@ -31,7 +31,7 @@ func TestFHSDirectories_Created(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	for _, dir := range FHSDirectories {
 		path := filepath.Join(tmp, dir)
@@ -59,7 +59,7 @@ func TestDownloadToolchain_SkipsExisting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	// Estrutura de diretórios real: rootfs/ e sources/ ficam no mesmo base dir
 	rootfsDir := filepath.Join(tmp, "rootfs")

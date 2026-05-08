@@ -1,3 +1,4 @@
+// Package config handles loading and validation of AgnosticOS configuration.
 package config
 
 import (

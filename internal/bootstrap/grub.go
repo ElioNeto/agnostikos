@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,7 +27,7 @@ func findMountPoint(device string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("open /proc/mounts: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -73,10 +74,10 @@ func mountESP(ctx context.Context, device, efiMountDir string) (bool, error) {
 // InstallGRUB configura o GRUB no RootFS (BIOS ou UEFI)
 func InstallGRUB(ctx context.Context, cfg GRUBConfig) error {
 	if cfg.RootfsDir == "" {
-		return fmt.Errorf("rootfs directory is required")
+		return errors.New("rootfs directory is required")
 	}
 	if !cfg.UEFI && cfg.Device == "" {
-		return fmt.Errorf("device is required for BIOS grub-install (e.g. /dev/sda)")
+		return errors.New("device is required for BIOS grub-install (e.g. /dev/sda)")
 	}
 
 	bootDir := filepath.Join(cfg.RootfsDir, "boot")
@@ -116,7 +117,7 @@ menuentry "Agnostikos Linux" {
 			if efiMounted {
 				defer func() {
 					fmt.Printf("[grub] unmounting ESP %s\n", efiMountDir)
-					_ = exec.Command("umount", efiMountDir).Run()
+					_ = exec.CommandContext(ctx, "umount", efiMountDir).Run()
 				}()
 			}
 		}

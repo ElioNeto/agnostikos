@@ -1,12 +1,15 @@
+// Package bootstrap provides functions for bootstrapping and building the AgnosticOS system.
 package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 )
 
 // BusyboxConfig contém os parâmetros de compilação do Busybox
@@ -19,10 +22,10 @@ type BusyboxConfig struct {
 // BuildBusybox baixa, configura, compila e instala o Busybox no diretório alvo
 func BuildBusybox(ctx context.Context, cfg BusyboxConfig) error {
 	if cfg.Version == "" {
-		return fmt.Errorf("busybox version is required")
+		return errors.New("busybox version is required")
 	}
 	if cfg.TargetDir == "" {
-		return fmt.Errorf("target directory is required")
+		return errors.New("target directory is required")
 	}
 
 	srcDir := filepath.Join(cfg.TargetDir, "sources")
@@ -33,7 +36,7 @@ func BuildBusybox(ctx context.Context, cfg BusyboxConfig) error {
 	busyboxDir := filepath.Join(srcDir, "busybox-"+cfg.Version)
 	tarball := fmt.Sprintf("busybox-%s.tar.bz2", cfg.Version)
 	tarballPath := filepath.Join(srcDir, tarball)
-	url := fmt.Sprintf("https://busybox.net/downloads/%s", tarball)
+	url := "https://busybox.net/downloads/" + tarball
 
 	// 1. Download
 	if _, err := os.Stat(tarballPath); os.IsNotExist(err) {
@@ -107,9 +110,9 @@ func BuildBusybox(ctx context.Context, cfg BusyboxConfig) error {
 	// 4. Compile
 	numCPUs := cfg.NumCPUs
 	if numCPUs == "" {
-		numCPUs = fmt.Sprintf("%d", runtime.NumCPU())
+		numCPUs = strconv.Itoa(runtime.NumCPU())
 	}
-	jobs := fmt.Sprintf("-j%s", numCPUs)
+	jobs := "-j" + numCPUs
 	fmt.Printf("[busybox] Compiling with %s...\n", jobs)
 	makeCmd := exec.CommandContext(ctx, "make", "-C", busyboxDir, jobs)
 	makeCmd.Stdout, makeCmd.Stderr = os.Stdout, os.Stderr

@@ -79,7 +79,7 @@ func TestDetectTool_NoTool(t *testing.T) {
 	b := &ISOBuilder{executor: &mockExecutor{}}
 	oldPath := os.Getenv("PATH")
 	t.Setenv("PATH", "")
-	defer os.Setenv("PATH", oldPath)
+	defer func() { _ = os.Setenv("PATH", oldPath) }()
 
 	tool, err := b.detectTool()
 	if err == nil {
@@ -125,7 +125,7 @@ func TestISOBuilder_Build_ToolNotFound(t *testing.T) {
 	b := &ISOBuilder{executor: &mockExecutor{}}
 	oldPath := os.Getenv("PATH")
 	t.Setenv("PATH", "")
-	defer os.Setenv("PATH", oldPath)
+	defer func() { _ = os.Setenv("PATH", oldPath) }()
 
 	err := b.Build(context.Background(), "/tmp/rootfs", "/tmp/output.iso")
 	if err == nil {

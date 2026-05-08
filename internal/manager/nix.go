@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -18,7 +19,7 @@ func NewNixBackend() *NixBackend {
 
 func (n *NixBackend) Install(pkgName string) error {
 	if strings.TrimSpace(pkgName) == "" {
-		return fmt.Errorf("package name cannot be empty")
+		return errors.New("package name cannot be empty")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -28,20 +29,20 @@ func (n *NixBackend) Install(pkgName string) error {
 	}
 	out, err := n.exec.RunContext(ctx, "nix", "profile", "install", pkg)
 	if err != nil {
-		return fmt.Errorf("nix install: %s — %s", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("nix install: %w — %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
 
 func (n *NixBackend) Remove(pkgName string) error {
 	if strings.TrimSpace(pkgName) == "" {
-		return fmt.Errorf("package name cannot be empty")
+		return errors.New("package name cannot be empty")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	out, err := n.exec.RunContext(ctx, "nix", "profile", "remove", pkgName)
 	if err != nil {
-		return fmt.Errorf("nix remove: %s — %s", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("nix remove: %w — %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
@@ -51,7 +52,7 @@ func (n *NixBackend) Update() error {
 	defer cancel()
 	out, err := n.exec.RunContext(ctx, "nix", "profile", "upgrade", ".*")
 	if err != nil {
-		return fmt.Errorf("nix update: %s — %s", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("nix update: %w — %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
@@ -61,7 +62,7 @@ func (n *NixBackend) List() ([]string, error) {
 	defer cancel()
 	out, err := n.exec.RunContext(ctx, "nix", "profile", "list", "--json")
 	if err != nil {
-		return nil, fmt.Errorf("nix list: %s — %s", err, strings.TrimSpace(string(out)))
+		return nil, fmt.Errorf("nix list: %w — %s", err, strings.TrimSpace(string(out)))
 	}
 	// nix profile list --json retorna JSON array — simplificamos para texto puro
 	var results []string
@@ -76,13 +77,13 @@ func (n *NixBackend) List() ([]string, error) {
 
 func (n *NixBackend) Search(query string) ([]string, error) {
 	if strings.TrimSpace(query) == "" {
-		return nil, fmt.Errorf("search query cannot be empty")
+		return nil, errors.New("search query cannot be empty")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	out, err := n.exec.RunContext(ctx, "nix", "search", "nixpkgs", query)
 	if err != nil && len(out) == 0 {
-		return nil, fmt.Errorf("nix search: %s", err)
+		return nil, fmt.Errorf("nix search: %w", err)
 	}
 	var results []string
 	for _, line := range strings.Split(string(out), "\n") {

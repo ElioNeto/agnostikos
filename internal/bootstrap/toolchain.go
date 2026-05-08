@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -19,7 +20,7 @@ type ToolchainConfig struct {
 
 // targetTriple detecta o target triple do sistema
 func targetTriple() string {
-	out, err := exec.Command("gcc", "-dumpmachine").CombinedOutput()
+	out, err := exec.CommandContext(context.Background(), "gcc", "-dumpmachine").CombinedOutput()
 	if err != nil {
 		return "x86_64-linux-gnu" // fallback
 	}
@@ -30,7 +31,7 @@ func toolchainNumCPUs(cfg ToolchainConfig) string {
 	if cfg.NumCPUs != "" {
 		return cfg.NumCPUs
 	}
-	return fmt.Sprintf("%d", runtime.NumCPU())
+	return strconv.Itoa(runtime.NumCPU())
 }
 
 func toolchainTarget(cfg ToolchainConfig) string {
@@ -85,7 +86,7 @@ func BuildBinutils(ctx context.Context, cfg ToolchainConfig) error {
 	fmt.Println("[toolchain] Configuring binutils...")
 	configureCmd := exec.CommandContext(ctx, filepath.Join(srcPath, "configure"),
 		"--prefix=/usr",
-		fmt.Sprintf("--target=%s", target),
+		"--target=" + target,
 		"--disable-nls",
 		"--disable-werror",
 		"--enable-gprofng=no",
@@ -98,7 +99,7 @@ func BuildBinutils(ctx context.Context, cfg ToolchainConfig) error {
 	}
 
 	fmt.Println("[toolchain] Compiling binutils...")
-	makeCmd := exec.CommandContext(ctx, "make", fmt.Sprintf("-j%s", jobs))
+	makeCmd := exec.CommandContext(ctx, "make", "-j"+jobs)
 	makeCmd.Dir = buildDir
 	makeCmd.Stdout, makeCmd.Stderr = os.Stdout, os.Stderr
 	if err := makeCmd.Run(); err != nil {
@@ -111,7 +112,7 @@ func BuildBinutils(ctx context.Context, cfg ToolchainConfig) error {
 		return fmt.Errorf("mkdir install dir: %w", err)
 	}
 	installCmd := exec.CommandContext(ctx, "make", "install",
-		fmt.Sprintf("DESTDIR=%s", installDir))
+		"DESTDIR=" + installDir)
 	installCmd.Dir = buildDir
 	installCmd.Stdout, installCmd.Stderr = os.Stdout, os.Stderr
 	if err := installCmd.Run(); err != nil {
@@ -165,7 +166,7 @@ func BuildGCC(ctx context.Context, cfg ToolchainConfig) error {
 	fmt.Println("[toolchain] Configuring GCC (pass 1, C only)...")
 	configureCmd := exec.CommandContext(ctx, filepath.Join(srcPath, "configure"),
 		"--prefix=/usr",
-		fmt.Sprintf("--target=%s", target),
+		"--target=" + target,
 		"--enable-languages=c",
 		"--disable-nls",
 		"--disable-libstdcxx-pch",
@@ -180,7 +181,7 @@ func BuildGCC(ctx context.Context, cfg ToolchainConfig) error {
 	}
 
 	fmt.Println("[toolchain] Compiling GCC...")
-	makeCmd := exec.CommandContext(ctx, "make", fmt.Sprintf("-j%s", jobs))
+	makeCmd := exec.CommandContext(ctx, "make", "-j"+jobs)
 	makeCmd.Dir = buildDir
 	makeCmd.Stdout, makeCmd.Stderr = os.Stdout, os.Stderr
 	if err := makeCmd.Run(); err != nil {
@@ -190,7 +191,7 @@ func BuildGCC(ctx context.Context, cfg ToolchainConfig) error {
 	fmt.Println("[toolchain] Installing GCC...")
 	installDir := cfg.TargetDir
 	installCmd := exec.CommandContext(ctx, "make", "install",
-		fmt.Sprintf("DESTDIR=%s", installDir))
+		"DESTDIR=" + installDir)
 	installCmd.Dir = buildDir
 	installCmd.Stdout, installCmd.Stderr = os.Stdout, os.Stderr
 	if err := installCmd.Run(); err != nil {
@@ -237,7 +238,7 @@ func BuildGLibc(ctx context.Context, cfg ToolchainConfig) error {
 	fmt.Println("[toolchain] Configuring glibc...")
 	configureCmd := exec.CommandContext(ctx, filepath.Join(srcPath, "configure"),
 		"--prefix=/usr",
-		fmt.Sprintf("--host=%s", target),
+		"--host=" + target,
 		"--disable-nls",
 		"--enable-kernel=4.19",
 	)
@@ -248,7 +249,7 @@ func BuildGLibc(ctx context.Context, cfg ToolchainConfig) error {
 	}
 
 	fmt.Println("[toolchain] Compiling glibc...")
-	makeCmd := exec.CommandContext(ctx, "make", fmt.Sprintf("-j%s", jobs))
+	makeCmd := exec.CommandContext(ctx, "make", "-j"+jobs)
 	makeCmd.Dir = buildDir
 	makeCmd.Stdout, makeCmd.Stderr = os.Stdout, os.Stderr
 	if err := makeCmd.Run(); err != nil {
@@ -258,7 +259,7 @@ func BuildGLibc(ctx context.Context, cfg ToolchainConfig) error {
 	fmt.Println("[toolchain] Installing glibc...")
 	installDir := cfg.TargetDir
 	installCmd := exec.CommandContext(ctx, "make", "install",
-		fmt.Sprintf("DESTDIR=%s", installDir))
+		"DESTDIR=" + installDir)
 	installCmd.Dir = buildDir
 	installCmd.Stdout, installCmd.Stderr = os.Stdout, os.Stderr
 	if err := installCmd.Run(); err != nil {

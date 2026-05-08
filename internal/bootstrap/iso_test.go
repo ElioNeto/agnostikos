@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -176,7 +177,7 @@ func TestCreateInitramfs_TestMode(t *testing.T) {
 	if cpioPath, err := exec.LookPath("cpio"); err == nil {
 		_ = cpioPath // just checking availability
 		// List contents and check for expected files
-		cmd := exec.Command("sh", "-c",
+		cmd := exec.CommandContext(context.Background(), "sh", "-c",
 			"zcat "+output+" | cpio -t 2>/dev/null")
 		out, err := cmd.Output()
 		if err != nil {

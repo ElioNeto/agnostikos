@@ -52,7 +52,7 @@ Exit code 0 = valid, 1 = invalid.`,
 		cfg, err := config.Load(args[0])
 		if err != nil {
 			// config.Load already calls Validate, so this handles all errors
-			return fmt.Errorf("❌ config validation failed:\n%s", err)
+			return fmt.Errorf("❌ config validation failed:\n%w", err)
 		}
 		fmt.Printf("✅ Config file '%s' is valid\n", args[0])
 		fmt.Printf("  Version:  %s\n", cfg.Version)
@@ -89,7 +89,7 @@ func TestRootCmd(t *testing.T) {
 	}
 }
 
-func TestRootCmd_Help(t *testing.T) {
+func TestRootCmdHelp(t *testing.T) {
 	buf := &bytes.Buffer{}
 	rootCmd.SetOut(buf)
 	rootCmd.SetArgs([]string{"--help"})

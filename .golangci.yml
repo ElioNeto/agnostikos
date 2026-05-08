@@ -1,33 +1,66 @@
 # See https://golangci-lint.run/usage/configuration/
+version: "2"
 linters:
   enable:
     - errcheck
     - gocritic
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
     - unused
-  presets:
-    - bugs
-    - performance
-  fast: false
-
-linters-settings:
-  staticcheck:
-    checks:
-      - all
+    # bugs preset expansion
+    - asasalint
+    - bodyclose
+    - durationcheck
+    - errorlint
+    - exhaustive
+    - gocheckcompilerdirectives
+    - gosec
+    - makezero
+    - nilerr
+    - noctx
+    - reassign
+    - testifylint
+    # performance preset expansion
+    - fatcontext
+    - perfsprint
+    - prealloc
+  settings:
+    staticcheck:
+      checks:
+        - all
+  exclusions:
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+    rules:
+      # Build tool intentionally creates directories with execute permission
+      - linters: [gosec]
+        text: "G301:"
+      # Build tool intentionally writes executable files
+      - linters: [gosec]
+        text: "G306:"
+      # Build tool intentionally runs subprocesses with variable args
+      - linters: [gosec]
+        text: "G204:"
+      # Build tool reads files at variable paths (config, kernel images, etc.)
+      - linters: [gosec]
+        text: "G304:"
+      # Build tool writes files with data from read (tainted data is intentional)
+      - linters: [gosec]
+        text: "G703:"
 
 run:
-  timeout: 5m
   go: "1.24"
   modules-download-mode: readonly
 
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-  new: false
 
 output:
   formats:
-    - format: colored-line-number
+    text:
+      path: stdout
+      colors: true

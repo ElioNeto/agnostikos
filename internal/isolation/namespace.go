@@ -1,8 +1,10 @@
 //go:build linux
 
+// Package isolation provides Linux namespace isolation for running commands.
 package isolation
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,7 +14,7 @@ import (
 // RunIsolated executa o comando dado em um namespace de mount isolado (CLONE_NEWNS).
 // Requer que o processo seja root ou tenha CAP_SYS_ADMIN.
 func RunIsolated(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(context.Background(), name, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
