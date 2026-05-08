@@ -16,7 +16,6 @@ import (
 )
 
 var (
-	backend  string
 	isolated bool
 	profile  string
 )
@@ -168,66 +167,6 @@ Otherwise, install a single package specified as argument.`,
 	},
 }
 
-var removeCmd = &cobra.Command{
-	Use:     "remove [package]",
-	Aliases: []string{"rm", "uninstall"},
-	Short:   "Remove a package via the specified backend",
-	Args:    cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		mgr := manager.NewAgnosticManager()
-		svc, ok := mgr.Backends[backend]
-		if !ok {
-			return fmt.Errorf("backend '%s' not found", backend)
-		}
-		fmt.Printf("🗑️  Removing '%s' via %s...\n", args[0], backend)
-		if err := svc.Remove(args[0]); err != nil {
-			return fmt.Errorf("removal failed: %w", err)
-		}
-		fmt.Printf("✅ '%s' removed\n", args[0])
-		return nil
-	},
-}
-
-var updateCmd = &cobra.Command{
-	Use:   "update",
-	Short: "Update all packages in the specified backend",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		mgr := manager.NewAgnosticManager()
-		svc, ok := mgr.Backends[backend]
-		if !ok {
-			return fmt.Errorf("backend '%s' not found", backend)
-		}
-		fmt.Printf("🔄 Updating via %s...\n", backend)
-		if err := svc.Update(); err != nil {
-			return fmt.Errorf("update failed: %w", err)
-		}
-		fmt.Println("✅ Update complete")
-		return nil
-	},
-}
-
-var searchCmd = &cobra.Command{
-	Use:   "search [query]",
-	Short: "Search for packages in the specified backend",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		mgr := manager.NewAgnosticManager()
-		svc, ok := mgr.Backends[backend]
-		if !ok {
-			return fmt.Errorf("backend '%s' not found", backend)
-		}
-		fmt.Printf("🔍 Searching '%s' in %s...\n", args[0], backend)
-		results, err := svc.Search(args[0])
-		if err != nil {
-			return fmt.Errorf("search failed: %w", err)
-		}
-		for _, r := range results {
-			fmt.Println(r)
-		}
-		return nil
-	},
-}
-
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List installed packages in the specified backend",
@@ -251,12 +190,12 @@ var listCmd = &cobra.Command{
 }
 
 func init() {
-	for _, cmd := range []*cobra.Command{installCmd, removeCmd, updateCmd, searchCmd, listCmd} {
+	for _, cmd := range []*cobra.Command{installCmd, listCmd} {
 		cmd.Flags().StringVarP(&backend, "backend", "b", "pacman", "Backend to use (pacman, nix, flatpak)")
 	}
 	installCmd.Flags().BoolVarP(&isolated, "isolated", "i", false, "Run in isolated Linux namespace")
 	installCmd.Flags().StringVarP(&profile, "profile", "p", "", "Profile to install (minimal, desktop, server, dev)")
-	rootCmd.AddCommand(installCmd, removeCmd, updateCmd, searchCmd, listCmd)
+	rootCmd.AddCommand(installCmd, listCmd)
 }
 
 func backendInstallArgs(backend, pkg string) ([]string, error) {

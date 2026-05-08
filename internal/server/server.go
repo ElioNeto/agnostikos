@@ -377,7 +377,7 @@ func (s *Server) updateBackend(ctx context.Context, name string) error {
 	}
 
 	s.broadcast(SSEEvent{Event: "update:start", Data: map[string]string{"backend": name}})
-	err := svc.Update()
+	err := svc.UpdateAll()
 	if err != nil {
 		return fmt.Errorf("backend %s update failed: %w", name, err)
 	}

@@ -47,12 +47,25 @@ func (n *NixBackend) Remove(pkgName string) error {
 	return nil
 }
 
-func (n *NixBackend) Update() error {
+func (n *NixBackend) Update(pkg string) error {
+	if strings.TrimSpace(pkg) == "" {
+		return errors.New("package name cannot be empty")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	out, err := n.exec.RunContext(ctx, "nix", "profile", "upgrade", ".*")
+	out, err := n.exec.RunContext(ctx, "nix", "profile", "upgrade", pkg)
 	if err != nil {
 		return fmt.Errorf("nix update: %w — %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+func (n *NixBackend) UpdateAll() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	out, err := n.exec.RunContext(ctx, "nix", "profile", "upgrade")
+	if err != nil {
+		return fmt.Errorf("nix update all: %w — %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }

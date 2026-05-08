@@ -148,13 +148,16 @@ func DownloadToolchain(rootfsDir string) error {
 	return nil
 }
 
+// httpClient is a variable so tests can replace it with a mock.
+var httpClient = http.DefaultClient
+
 // downloadFile faz o download de uma URL para um arquivo local
 func downloadFile(dest, url string) error {
 	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("http get: %w", err)
 	}

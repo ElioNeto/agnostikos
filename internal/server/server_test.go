@@ -15,11 +15,12 @@ import (
 
 // MockPackageService implements manager.PackageService for testing
 type MockPackageService struct {
-	InstallFunc func(pkgName string) error
-	RemoveFunc  func(pkgName string) error
-	UpdateFunc  func() error
-	SearchFunc  func(query string) ([]string, error)
-	ListFunc    func() ([]string, error)
+	InstallFunc   func(pkgName string) error
+	RemoveFunc    func(pkgName string) error
+	UpdateFunc    func(pkg string) error
+	UpdateAllFunc func() error
+	SearchFunc    func(query string) ([]string, error)
+	ListFunc      func() ([]string, error)
 }
 
 func (m *MockPackageService) Install(pkgName string) error {
@@ -36,9 +37,16 @@ func (m *MockPackageService) Remove(pkgName string) error {
 	return nil
 }
 
-func (m *MockPackageService) Update() error {
+func (m *MockPackageService) Update(pkg string) error {
 	if m.UpdateFunc != nil {
-		return m.UpdateFunc()
+		return m.UpdateFunc(pkg)
+	}
+	return nil
+}
+
+func (m *MockPackageService) UpdateAll() error {
+	if m.UpdateAllFunc != nil {
+		return m.UpdateAllFunc()
 	}
 	return nil
 }
@@ -84,7 +92,7 @@ func setupTestServer(t *testing.T) *Server {
 		RemoveFunc: func(name string) error {
 			return nil
 		},
-		UpdateFunc: func() error {
+		UpdateAllFunc: func() error {
 			return nil
 		},
 	}

@@ -11,6 +11,9 @@ import (
 	"strings"
 )
 
+// execCommandContext is a variable so tests can replace it with a mock.
+var execCommandContext = exec.CommandContext
+
 // ToolchainConfig contém os parâmetros de compilação da toolchain
 type ToolchainConfig struct {
 	TargetDir string // diretório raiz do RootFS
@@ -20,7 +23,7 @@ type ToolchainConfig struct {
 
 // targetTriple detecta o target triple do sistema
 func targetTriple() string {
-	out, err := exec.CommandContext(context.Background(), "gcc", "-dumpmachine").CombinedOutput()
+	out, err := execCommandContext(context.Background(), "gcc", "-dumpmachine").CombinedOutput()
 	if err != nil {
 		return "x86_64-linux-gnu" // fallback
 	}
@@ -54,7 +57,7 @@ func extractIfNeeded(ctx context.Context, tarballPath, srcDir, expectedDir strin
 		return nil
 	}
 	fmt.Printf("[toolchain] extracting %s...\n", filepath.Base(tarballPath))
-	cmd := exec.CommandContext(ctx, "tar", "-xf", tarballPath, "-C", srcDir)
+	cmd := execCommandContext(ctx, "tar", "-xf", tarballPath, "-C", srcDir)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	return cmd.Run()
 }
@@ -90,7 +93,7 @@ func BuildBinutils(ctx context.Context, cfg ToolchainConfig) error {
 	}
 
 	fmt.Println("[toolchain] Configuring binutils...")
-	configureCmd := exec.CommandContext(ctx, filepath.Join(srcPath, "configure"),
+	configureCmd := execCommandContext(ctx, filepath.Join(srcPath, "configure"),
 		"--prefix=/usr",
 		"--target=" + target,
 		"--disable-nls",
@@ -105,7 +108,7 @@ func BuildBinutils(ctx context.Context, cfg ToolchainConfig) error {
 	}
 
 	fmt.Println("[toolchain] Compiling binutils...")
-	makeCmd := exec.CommandContext(ctx, "make", "-j"+jobs)
+	makeCmd := execCommandContext(ctx, "make", "-j"+jobs)
 	makeCmd.Dir = buildDir
 	makeCmd.Stdout, makeCmd.Stderr = os.Stdout, os.Stderr
 	if err := makeCmd.Run(); err != nil {
@@ -117,7 +120,7 @@ func BuildBinutils(ctx context.Context, cfg ToolchainConfig) error {
 	if err := os.MkdirAll(installDir, 0755); err != nil {
 		return fmt.Errorf("mkdir install dir: %w", err)
 	}
-	installCmd := exec.CommandContext(ctx, "make", "install",
+	installCmd := execCommandContext(ctx, "make", "install",
 		"DESTDIR=" + installDir)
 	installCmd.Dir = buildDir
 	installCmd.Stdout, installCmd.Stderr = os.Stdout, os.Stderr
@@ -154,7 +157,7 @@ func BuildGCC(ctx context.Context, cfg ToolchainConfig) error {
 
 	// Baixar dependências do GCC (GMP, MPFR, MPC, ISL) via script oficial
 	fmt.Println("[toolchain] Downloading GCC prerequisites via contrib/download_prerequisites...")
-	dlCmd := exec.CommandContext(ctx, "bash",
+	dlCmd := execCommandContext(ctx, "bash",
 		filepath.Join(srcPath, "contrib", "download_prerequisites"),
 	)
 	dlCmd.Dir = srcPath
@@ -175,7 +178,7 @@ func BuildGCC(ctx context.Context, cfg ToolchainConfig) error {
 	}
 
 	fmt.Println("[toolchain] Configuring GCC (pass 1, C only)...")
-	configureCmd := exec.CommandContext(ctx, filepath.Join(srcPath, "configure"),
+	configureCmd := execCommandContext(ctx, filepath.Join(srcPath, "configure"),
 		"--prefix=/usr",
 		"--target=" + target,
 		"--enable-languages=c",
@@ -192,7 +195,7 @@ func BuildGCC(ctx context.Context, cfg ToolchainConfig) error {
 	}
 
 	fmt.Println("[toolchain] Compiling GCC...")
-	makeCmd := exec.CommandContext(ctx, "make", "-j"+jobs)
+	makeCmd := execCommandContext(ctx, "make", "-j"+jobs)
 	makeCmd.Dir = buildDir
 	makeCmd.Stdout, makeCmd.Stderr = os.Stdout, os.Stderr
 	if err := makeCmd.Run(); err != nil {
@@ -201,7 +204,7 @@ func BuildGCC(ctx context.Context, cfg ToolchainConfig) error {
 
 	fmt.Println("[toolchain] Installing GCC...")
 	installDir := cfg.TargetDir
-	installCmd := exec.CommandContext(ctx, "make", "install",
+	installCmd := execCommandContext(ctx, "make", "install",
 		"DESTDIR=" + installDir)
 	installCmd.Dir = buildDir
 	installCmd.Stdout, installCmd.Stderr = os.Stdout, os.Stderr
@@ -247,7 +250,7 @@ func BuildGLibc(ctx context.Context, cfg ToolchainConfig) error {
 	}
 
 	fmt.Println("[toolchain] Configuring glibc...")
-	configureCmd := exec.CommandContext(ctx, filepath.Join(srcPath, "configure"),
+	configureCmd := execCommandContext(ctx, filepath.Join(srcPath, "configure"),
 		"--prefix=/usr",
 		"--host=" + target,
 		"--disable-nls",
@@ -260,7 +263,7 @@ func BuildGLibc(ctx context.Context, cfg ToolchainConfig) error {
 	}
 
 	fmt.Println("[toolchain] Compiling glibc...")
-	makeCmd := exec.CommandContext(ctx, "make", "-j"+jobs)
+	makeCmd := execCommandContext(ctx, "make", "-j"+jobs)
 	makeCmd.Dir = buildDir
 	makeCmd.Stdout, makeCmd.Stderr = os.Stdout, os.Stderr
 	if err := makeCmd.Run(); err != nil {
@@ -269,7 +272,7 @@ func BuildGLibc(ctx context.Context, cfg ToolchainConfig) error {
 
 	fmt.Println("[toolchain] Installing glibc...")
 	installDir := cfg.TargetDir
-	installCmd := exec.CommandContext(ctx, "make", "install",
+	installCmd := execCommandContext(ctx, "make", "install",
 		"DESTDIR=" + installDir)
 	installCmd.Dir = buildDir
 	installCmd.Stdout, installCmd.Stderr = os.Stdout, os.Stderr

@@ -21,30 +21,6 @@ func TestInstallCmd_ValidBackend(t *testing.T) {
 	_ = rootCmd.Execute()
 }
 
-func TestRemoveCmd_InvalidBackend(t *testing.T) {
-	rootCmd.SetArgs([]string{"remove", "firefox", "--backend", "xyz"})
-	err := rootCmd.Execute()
-	if err == nil {
-		t.Error("expected error for invalid backend, got nil")
-	}
-}
-
-func TestSearchCmd_InvalidBackend(t *testing.T) {
-	rootCmd.SetArgs([]string{"search", "neovim", "--backend", "xyz"})
-	err := rootCmd.Execute()
-	if err == nil {
-		t.Error("expected error for invalid backend, got nil")
-	}
-}
-
-func TestUpdateCmd_InvalidBackend(t *testing.T) {
-	rootCmd.SetArgs([]string{"update", "--backend", "xyz"})
-	err := rootCmd.Execute()
-	if err == nil {
-		t.Error("expected error for invalid backend, got nil")
-	}
-}
-
 func TestListCmd_InvalidBackend(t *testing.T) {
 	rootCmd.SetArgs([]string{"list", "--backend", "xyz"})
 	err := rootCmd.Execute()

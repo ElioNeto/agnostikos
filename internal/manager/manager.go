@@ -4,7 +4,8 @@ package manager
 type PackageService interface {
 	Install(pkgName string) error
 	Remove(pkgName string) error
-	Update() error
+	Update(pkg string) error
+	UpdateAll() error
 	Search(query string) ([]string, error)
 	List() ([]string, error) // lista pacotes instalados
 }

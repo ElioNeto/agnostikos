@@ -14,6 +14,7 @@ var (
 	Version    = "0.1.0"
 	Commit     = "dev"
 	configFile string
+	backend    string
 )
 
 var rootCmd = &cobra.Command{

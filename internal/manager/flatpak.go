@@ -43,12 +43,25 @@ func (f *FlatpakBackend) Remove(pkgName string) error {
 	return nil
 }
 
-func (f *FlatpakBackend) Update() error {
+func (f *FlatpakBackend) Update(pkg string) error {
+	if strings.TrimSpace(pkg) == "" {
+		return errors.New("package name cannot be empty")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	out, err := f.exec.RunContext(ctx, "flatpak", "update", "--noninteractive", "-y", pkg)
+	if err != nil {
+		return fmt.Errorf("flatpak update: %w — %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+func (f *FlatpakBackend) UpdateAll() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	out, err := f.exec.RunContext(ctx, "flatpak", "update", "--noninteractive", "-y")
 	if err != nil {
-		return fmt.Errorf("flatpak update: %w — %s", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("flatpak update all: %w — %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }

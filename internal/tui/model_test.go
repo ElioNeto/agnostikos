@@ -13,16 +13,16 @@ import (
 type mockBackend struct {
 	installErr error
 	removeErr  error
-	updateErr  error
 	searchRes  []string
 	searchErr  error
 }
 
-func (m *mockBackend) Install(pkgName string) error       { return m.installErr }
-func (m *mockBackend) Remove(pkgName string) error        { return m.removeErr }
-func (m *mockBackend) Update() error                      { return m.updateErr }
+func (m *mockBackend) Install(pkgName string) error        { return m.installErr }
+func (m *mockBackend) Remove(pkgName string) error         { return m.removeErr }
+func (m *mockBackend) Update(pkg string) error             { return nil }
+func (m *mockBackend) UpdateAll() error                    { return nil }
 func (m *mockBackend) Search(q string) ([]string, error)   { return m.searchRes, m.searchErr }
-func (m *mockBackend) List() ([]string, error)            { return []string{"pkg1", "pkg2"}, nil }
+func (m *mockBackend) List() ([]string, error)             { return []string{"pkg1", "pkg2"}, nil }
 
 // newTestModel creates a Model with a mock backend for testing.
 func newTestModel() Model {

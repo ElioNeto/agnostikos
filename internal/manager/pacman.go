@@ -43,12 +43,25 @@ func (p *PacmanBackend) Remove(pkgName string) error {
 	return nil
 }
 
-func (p *PacmanBackend) Update() error {
+func (p *PacmanBackend) Update(pkg string) error {
+	if strings.TrimSpace(pkg) == "" {
+		return errors.New("package name cannot be empty")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	out, err := p.exec.RunContext(ctx, "pacman", "-S", "--noconfirm", pkg)
+	if err != nil {
+		return fmt.Errorf("pacman update: %w — %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+func (p *PacmanBackend) UpdateAll() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	out, err := p.exec.RunContext(ctx, "pacman", "-Syu", "--noconfirm")
 	if err != nil {
-		return fmt.Errorf("pacman update: %w — %s", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("pacman update all: %w — %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }

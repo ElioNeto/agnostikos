@@ -60,16 +60,37 @@ func TestPacmanBackend_Remove_ExecError(t *testing.T) {
 	}
 }
 
+func TestPacmanBackend_Update_EmptyName(t *testing.T) {
+	p := &PacmanBackend{exec: &MockExecutor{}}
+	if err := p.Update(""); err == nil {
+		t.Error("expected error for empty package name")
+	}
+}
+
 func TestPacmanBackend_Update_Success(t *testing.T) {
 	p := &PacmanBackend{exec: &MockExecutor{}}
-	if err := p.Update(); err != nil {
+	if err := p.Update("firefox"); err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
 }
 
 func TestPacmanBackend_Update_ExecError(t *testing.T) {
 	p := &PacmanBackend{exec: &MockExecutor{Err: errors.New("update failed")}}
-	if err := p.Update(); err == nil {
+	if err := p.Update("firefox"); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestPacmanBackend_UpdateAll_Success(t *testing.T) {
+	p := &PacmanBackend{exec: &MockExecutor{}}
+	if err := p.UpdateAll(); err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+}
+
+func TestPacmanBackend_UpdateAll_ExecError(t *testing.T) {
+	p := &PacmanBackend{exec: &MockExecutor{Err: errors.New("update failed")}}
+	if err := p.UpdateAll(); err == nil {
 		t.Error("expected error, got nil")
 	}
 }
@@ -171,16 +192,37 @@ func TestNixBackend_Remove_ExecError(t *testing.T) {
 	}
 }
 
+func TestNixBackend_Update_EmptyName(t *testing.T) {
+	n := &NixBackend{exec: &MockExecutor{}}
+	if err := n.Update(""); err == nil {
+		t.Error("expected error for empty package name")
+	}
+}
+
 func TestNixBackend_Update_Success(t *testing.T) {
 	n := &NixBackend{exec: &MockExecutor{}}
-	if err := n.Update(); err != nil {
+	if err := n.Update("neovim"); err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
 }
 
 func TestNixBackend_Update_ExecError(t *testing.T) {
 	n := &NixBackend{exec: &MockExecutor{Err: errors.New("upgrade failed")}}
-	if err := n.Update(); err == nil {
+	if err := n.Update("neovim"); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestNixBackend_UpdateAll_Success(t *testing.T) {
+	n := &NixBackend{exec: &MockExecutor{}}
+	if err := n.UpdateAll(); err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+}
+
+func TestNixBackend_UpdateAll_ExecError(t *testing.T) {
+	n := &NixBackend{exec: &MockExecutor{Err: errors.New("upgrade failed")}}
+	if err := n.UpdateAll(); err == nil {
 		t.Error("expected error, got nil")
 	}
 }
@@ -280,16 +322,37 @@ func TestFlatpakBackend_Remove_ExecError(t *testing.T) {
 	}
 }
 
+func TestFlatpakBackend_Update_EmptyName(t *testing.T) {
+	f := &FlatpakBackend{exec: &MockExecutor{}}
+	if err := f.Update(""); err == nil {
+		t.Error("expected error for empty package name")
+	}
+}
+
 func TestFlatpakBackend_Update_Success(t *testing.T) {
 	f := &FlatpakBackend{exec: &MockExecutor{}}
-	if err := f.Update(); err != nil {
+	if err := f.Update("com.spotify.Client"); err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
 }
 
 func TestFlatpakBackend_Update_ExecError(t *testing.T) {
 	f := &FlatpakBackend{exec: &MockExecutor{Err: errors.New("update failed")}}
-	if err := f.Update(); err == nil {
+	if err := f.Update("com.spotify.Client"); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestFlatpakBackend_UpdateAll_Success(t *testing.T) {
+	f := &FlatpakBackend{exec: &MockExecutor{}}
+	if err := f.UpdateAll(); err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+}
+
+func TestFlatpakBackend_UpdateAll_ExecError(t *testing.T) {
+	f := &FlatpakBackend{exec: &MockExecutor{Err: errors.New("update failed")}}
+	if err := f.UpdateAll(); err == nil {
 		t.Error("expected error, got nil")
 	}
 }
@@ -368,15 +431,17 @@ func TestAgnosticManager_ListBackends(t *testing.T) {
 
 // MockBackend implementa PackageService para testes de manager
 type MockBackend struct {
-	InstallErr error
-	RemoveErr  error
-	UpdateErr  error
-	SearchRes  []string
-	SearchErr  error
+	InstallErr   error
+	RemoveErr    error
+	UpdateErr    error
+	UpdateAllErr error
+	SearchRes    []string
+	SearchErr    error
 }
 
 func (m *MockBackend) Install(pkgName string) error            { return m.InstallErr }
 func (m *MockBackend) Remove(pkgName string) error             { return m.RemoveErr }
-func (m *MockBackend) Update() error                           { return m.UpdateErr }
+func (m *MockBackend) Update(pkg string) error                 { return m.UpdateErr }
+func (m *MockBackend) UpdateAll() error                        { return m.UpdateAllErr }
 func (m *MockBackend) Search(q string) ([]string, error)       { return m.SearchRes, m.SearchErr }
 func (m *MockBackend) List() ([]string, error)                 { return []string{"pkg1", "pkg2"}, nil }

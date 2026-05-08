@@ -84,6 +84,46 @@ fi
 	}
 }
 
+func TestKernelArch(t *testing.T) {
+	tests := []struct {
+		arch          string
+		wantKarch     string
+		wantDefconfig string
+		wantImagePath string
+	}{
+		{arch: "amd64", wantKarch: "x86_64", wantDefconfig: "x86_64_defconfig", wantImagePath: "arch/x86/boot/bzImage"},
+		{arch: "arm64", wantKarch: "arm64", wantDefconfig: "defconfig", wantImagePath: "arch/arm64/boot/Image"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.arch, func(t *testing.T) {
+			gotKarch, gotDefconfig, gotImagePath := kernelArch(tt.arch)
+			if gotKarch != tt.wantKarch {
+				t.Errorf("kernelArch(%q) karch = %q; want %q", tt.arch, gotKarch, tt.wantKarch)
+			}
+			if gotDefconfig != tt.wantDefconfig {
+				t.Errorf("kernelArch(%q) defconfig = %q; want %q", tt.arch, gotDefconfig, tt.wantDefconfig)
+			}
+			if gotImagePath != tt.wantImagePath {
+				t.Errorf("kernelArch(%q) imagePath = %q; want %q", tt.arch, gotImagePath, tt.wantImagePath)
+			}
+		})
+	}
+}
+
+func TestKernelArch_Default(t *testing.T) {
+	// Default case (any unknown arch) should use x86_64
+	gotKarch, gotDefconfig, gotImagePath := kernelArch("unknown")
+	if gotKarch != "x86_64" {
+		t.Errorf("kernelArch('unknown') karch = %q; want 'x86_64'", gotKarch)
+	}
+	if gotDefconfig != "x86_64_defconfig" {
+		t.Errorf("kernelArch('unknown') defconfig = %q; want 'x86_64_defconfig'", gotDefconfig)
+	}
+	if gotImagePath != "arch/x86/boot/bzImage" {
+		t.Errorf("kernelArch('unknown') imagePath = %q; want 'arch/x86/boot/bzImage'", gotImagePath)
+	}
+}
+
 func TestApplyKernelConfigMerge_WritesFragmentFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
