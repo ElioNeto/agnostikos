@@ -11,6 +11,13 @@
 # [requerido] Versão do perfil de configuração.
 version: "1.0"
 
+# [opcional] Perfil de instalação.
+# Opções: minimal, desktop, server, dev
+# Quando definido, pacotes específicos do perfil são incluídos automaticamente.
+# Exemplo: profile: desktop adiciona hyprland, waybar, etc.
+# Exemplo: profile: dev adiciona ferramentas de desenvolvimento (mise, neovim, lazygit, etc.)
+# profile: dev
+
 # [requerido] Locale do sistema (formato: <idioma>_<PAÍS>.<codificação>).
 locale: pt_BR.UTF-8
 

@@ -3,11 +3,14 @@ package agnostic
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/ElioNeto/agnostikos/internal/config"
 	"github.com/ElioNeto/agnostikos/internal/manager"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"github.com/ElioNeto/agnostikos/internal/isolation"
 )
@@ -15,7 +18,13 @@ import (
 var (
 	backend  string
 	isolated bool
+	profile  string
 )
+
+// profilePackages represents the package list in a profile YAML file.
+type profilePackages struct {
+	Packages []string `yaml:"packages"`
+}
 
 var installCmd = &cobra.Command{
 	Use:   "install [package...]",
@@ -26,6 +35,38 @@ If --config is provided, installs all packages defined in the config file (base 
 Otherwise, install a single package specified as argument.`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// If --profile is set, install packages from the profile file
+		if profile != "" {
+			if !config.SupportedProfiles[profile] {
+				return fmt.Errorf("profile %q is not supported — must be one of: minimal, desktop, server, dev", profile)
+			}
+
+			profilePath := filepath.Join("configs", "profiles", profile+".yaml")
+			data, err := os.ReadFile(profilePath)
+			if err != nil {
+				return fmt.Errorf("reading profile %q: %w", profile, err)
+			}
+
+			var pp profilePackages
+			if err := yaml.Unmarshal(data, &pp); err != nil {
+				return fmt.Errorf("parsing profile %q: %w", profile, err)
+			}
+
+			if len(pp.Packages) == 0 {
+				fmt.Printf("No packages defined in profile %q\n", profile)
+				return nil
+			}
+
+			fmt.Printf("📋 Profile %q — %d packages to install:\n", profile, len(pp.Packages))
+			for _, pkg := range pp.Packages {
+				fmt.Printf("   • %s\n", pkg)
+			}
+			fmt.Println()
+			fmt.Printf("ℹ️  Run with --backend <name> to install (default: %s)\n", backend)
+			fmt.Println("   Example: agnostic install --profile dev --backend pacman")
+			return nil
+		}
+
 		// If --config is set, install all packages from the config file
 		if configFile != "" {
 			cfg, err := config.Load(configFile)
@@ -172,6 +213,7 @@ func init() {
 		cmd.Flags().StringVarP(&backend, "backend", "b", "pacman", "Backend to use (pacman, nix, flatpak)")
 	}
 	installCmd.Flags().BoolVarP(&isolated, "isolated", "i", false, "Run in isolated Linux namespace")
+	installCmd.Flags().StringVarP(&profile, "profile", "p", "", "Profile to install (minimal, desktop, server, dev)")
 	rootCmd.AddCommand(installCmd, removeCmd, updateCmd, searchCmd, listCmd)
 }
 

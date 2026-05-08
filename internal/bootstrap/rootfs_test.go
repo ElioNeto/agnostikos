@@ -82,6 +82,151 @@ func TestDownloadToolchain_SkipsExisting(t *testing.T) {
 	}
 }
 
+func TestConfigureDefaultShell(t *testing.T) {
+	tests := []struct {
+		name       string
+		prepShells string // initial /etc/shells content ("" means file does not exist)
+		prepPasswd string // initial /etc/passwd content ("" means file does not exist)
+		hasZsh     bool   // whether /bin/zsh exists in rootfs
+		wantShells string // expected /etc/shells content after call
+		wantPasswd string // expected /etc/passwd content after call
+	}{
+		{
+			name:       "happy path adds zsh to both shells and passwd",
+			prepShells: "",
+			prepPasswd: "root:x:0:0:root:/root:/bin/sh\n",
+			hasZsh:     true,
+			wantShells: "/bin/zsh\n",
+			wantPasswd: "root:x:0:0:root:/root:/bin/zsh\n",
+		},
+		{
+			name:       "zsh not found skips gracefully",
+			prepShells: "",
+			prepPasswd: "",
+			hasZsh:     false,
+			wantShells: "",
+			wantPasswd: "",
+		},
+		{
+			name:       "shells already contains /bin/zsh is idempotent",
+			prepShells: "/bin/bash\n/bin/zsh\n",
+			prepPasswd: "root:x:0:0:root:/root:/bin/sh\n",
+			hasZsh:     true,
+			wantShells: "/bin/bash\n/bin/zsh\n",
+			wantPasswd: "root:x:0:0:root:/root:/bin/zsh\n",
+		},
+		{
+			name:       "passwd already has root shell set to /bin/zsh is idempotent",
+			prepShells: "",
+			prepPasswd: "root:x:0:0:root:/root:/bin/zsh\n",
+			hasZsh:     true,
+			wantShells: "/bin/zsh\n",
+			wantPasswd: "root:x:0:0:root:/root:/bin/zsh\n",
+		},
+		{
+			name:       "shells file does not exist yet creates it",
+			prepShells: "",
+			prepPasswd: "root:x:0:0:root:/root:/bin/sh\n",
+			hasZsh:     true,
+			wantShells: "/bin/zsh\n",
+			wantPasswd: "root:x:0:0:root:/root:/bin/zsh\n",
+		},
+		{
+			name:       "passwd file does not exist yet creates it",
+			prepShells: "",
+			prepPasswd: "",
+			hasZsh:     true,
+			wantShells: "/bin/zsh\n",
+			wantPasswd: "\nroot:x:0:0:root:/root:/bin/zsh",
+		},
+		{
+			name:       "both shells and passwd already fully configured",
+			prepShells: "/bin/zsh\n",
+			prepPasswd: "root:x:0:0:root:/root:/bin/zsh\n",
+			hasZsh:     true,
+			wantShells: "/bin/zsh\n",
+			wantPasswd: "root:x:0:0:root:/root:/bin/zsh\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmp := t.TempDir()
+
+			// Conditionally create /bin/zsh
+			if tt.hasZsh {
+				zshPath := filepath.Join(tmp, "bin", "zsh")
+				if err := os.MkdirAll(filepath.Dir(zshPath), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(zshPath, []byte("#!/bin/sh\nexit 0"), 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			// Conditionally create /etc/shells
+			if tt.prepShells != "" {
+				shellsPath := filepath.Join(tmp, "etc", "shells")
+				if err := os.MkdirAll(filepath.Dir(shellsPath), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(shellsPath, []byte(tt.prepShells), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			// Conditionally create /etc/passwd
+			if tt.prepPasswd != "" {
+				passwdPath := filepath.Join(tmp, "etc", "passwd")
+				if err := os.MkdirAll(filepath.Dir(passwdPath), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(passwdPath, []byte(tt.prepPasswd), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			// Execute
+			err := configureDefaultShell(tmp)
+			if err != nil {
+				t.Fatalf("configureDefaultShell() returned unexpected error: %v", err)
+			}
+
+			// Assert /etc/shells
+			shellsPath := filepath.Join(tmp, "etc", "shells")
+			if tt.wantShells == "" {
+				if _, statErr := os.Stat(shellsPath); !os.IsNotExist(statErr) {
+					t.Errorf("expected /etc/shells to not exist, but it does")
+				}
+			} else {
+				data, readErr := os.ReadFile(shellsPath)
+				if readErr != nil {
+					t.Fatalf("failed to read /etc/shells: %v", readErr)
+				}
+				if string(data) != tt.wantShells {
+					t.Errorf("/etc/shells content mismatch:\ngot:  %q\nwant: %q", string(data), tt.wantShells)
+				}
+			}
+
+			// Assert /etc/passwd
+			passwdPath := filepath.Join(tmp, "etc", "passwd")
+			if tt.wantPasswd == "" {
+				if _, statErr := os.Stat(passwdPath); !os.IsNotExist(statErr) {
+					t.Errorf("expected /etc/passwd to not exist, but it does")
+				}
+			} else {
+				data, readErr := os.ReadFile(passwdPath)
+				if readErr != nil {
+					t.Fatalf("failed to read /etc/passwd: %v", readErr)
+				}
+				if string(data) != tt.wantPasswd {
+					t.Errorf("/etc/passwd content mismatch:\ngot:  %q\nwant: %q", string(data), tt.wantPasswd)
+				}
+			}
+		})
+	}
+}
+
 func TestDefaultToolchain_HasRequiredPackages(t *testing.T) {
 	required := []string{"binutils", "gcc", "glibc"}
 	for _, req := range required {

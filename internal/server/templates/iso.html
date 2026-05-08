@@ -1,0 +1,58 @@
+{{define "content"}}
+<h1 style="margin-bottom:1.5rem; font-size:1.75rem; font-weight:700;">ISO Builder</h1>
+
+<div class="card">
+  <h2>Build ISO Image</h2>
+  <p style="color:#94a3b8; font-size:0.875rem; margin-bottom:1rem;">
+    Generate a bootable ISO image from the current system configuration.
+  </p>
+
+  <button id="build-btn"
+          hx-post="/api/iso/build"
+          hx-swap="none"
+          hx-trigger="click"
+          _="on htmx:afterRequest if response.status == 200 then
+             put 'ISO build started...' into #build-status
+             else put 'Failed to start build' into #build-status">
+    💿 Start ISO Build
+  </button>
+
+  <p id="build-status" style="margin-top:0.75rem; font-weight:600;"></p>
+</div>
+
+<div class="card">
+  <h2>Build Progress</h2>
+  <div hx-ext="sse" sse-connect="/events"
+       sse-swap="iso:progress,iso:done,iso:error"
+       hx-swap="innerHTML">
+    <div id="iso-progress">
+      <p style="color:#64748b;">No active build.</p>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Current Status</h2>
+  <div id="iso-status-display"
+       hx-get="/api/iso/status"
+       hx-trigger="every 5s">
+    <p style="color:#64748b;">Checking status...</p>
+  </div>
+</div>
+
+<script>
+  // Update progress display on SSE events
+  document.body.addEventListener('sse:iso:progress', function(evt) {
+    var el = document.getElementById('iso-progress');
+    if (el) el.innerHTML = '<div class="progress-bar"><div class="progress-bar-fill" style="width:50%"></div></div><p style="color:#94a3b8;margin-top:0.5rem;">' + evt.detail.data + '</p>';
+  });
+  document.body.addEventListener('sse:iso:done', function(evt) {
+    var el = document.getElementById('iso-progress');
+    if (el) el.innerHTML = '<div class="progress-bar"><div class="progress-bar-fill" style="width:100%;background:#10b981;"></div></div><p style="color:#10b981;margin-top:0.5rem;">' + evt.detail.data + '</p>';
+  });
+  document.body.addEventListener('sse:iso:error', function(evt) {
+    var el = document.getElementById('iso-progress');
+    if (el) el.innerHTML = '<p style="color:#ef4444;">Error: ' + evt.detail.data + '</p>';
+  });
+</script>
+{{end}}

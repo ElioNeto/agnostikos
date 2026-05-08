@@ -29,6 +29,9 @@ var defaultDotfiles = []dotfileEntry{
 	{SourceRel: "starship/starship.toml", DestRel: ".config/starship.toml"},
 	{SourceRel: "alacritty/alacritty.toml", DestRel: ".config/alacritty/alacritty.toml"},
 	{SourceRel: "tmux/.tmux.conf", DestRel: ".tmux.conf"},
+	{SourceRel: "hyprland/hyprland.conf", DestRel: ".config/hypr/hyprland.conf"},
+	{SourceRel: "waybar/config", DestRel: ".config/waybar/config"},
+	{SourceRel: "waybar/style.css", DestRel: ".config/waybar/style.css"},
 }
 
 // Manager gerencia a aplicação e listagem de dotfiles.

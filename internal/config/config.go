@@ -17,6 +17,14 @@ var SupportedBackends = map[string]bool{
 	"flatpak": true,
 }
 
+// SupportedProfiles lista os perfis válidos
+var SupportedProfiles = map[string]bool{
+	"minimal": true,
+	"desktop": true,
+	"server":  true,
+	"dev":     true,
+}
+
 // localeRegex valida formato <idioma>_<PAÍS>.<codificação> (ex: pt_BR.UTF-8)
 var localeRegex = regexp.MustCompile(`^[a-z]{2}_[A-Z]{2}\.[a-zA-Z0-9._-]+$`)
 
@@ -27,6 +35,7 @@ var timezoneRegex = regexp.MustCompile(`^[A-Za-z_]+(/[A-Za-z_]+)?$`)
 // Config represents the agnostic.yaml configuration structure.
 type Config struct {
 	Version  string `yaml:"version"`
+	Profile  string `yaml:"profile"`
 	Locale   string `yaml:"locale"`
 	Timezone string `yaml:"timezone"`
 	Packages struct {
@@ -79,6 +88,11 @@ func (c *Config) Validate() error {
 	// Version
 	if c.Version == "" {
 		errs = append(errs, "version is required")
+	}
+
+	// Profile (optional, validate if set)
+	if c.Profile != "" && !SupportedProfiles[c.Profile] {
+		errs = append(errs, fmt.Sprintf("profile %q is not supported — must be one of: minimal, desktop, server, dev", c.Profile))
 	}
 
 	// Locale

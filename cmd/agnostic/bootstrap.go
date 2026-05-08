@@ -23,9 +23,10 @@ var (
 	bootstrapSkipInitramfs bool
 	bootstrapSkipGRUB      bool
 	bootstrapForce         bool
-	bootstrapDotfilesApply  bool
-	bootstrapDotfilesSource string
-	bootstrapConfigsDir     string
+	bootstrapDotfilesApply   bool
+	bootstrapDotfilesSource  string
+	bootstrapConfigsDir      string
+	bootstrapAutologinUser   string
 )
 
 var bootstrapCmd = &cobra.Command{
@@ -67,6 +68,7 @@ Use --force para recompilar tudo mesmo que já exista.`,
 			DotfilesApply:  bootstrapDotfilesApply,
 			DotfilesSource: bootstrapDotfilesSource,
 			ConfigsDir:     bootstrapConfigsDir,
+			AutoLoginUser:  bootstrapAutologinUser,
 		}
 
 		fmt.Printf("Starting bootstrap with config: %+v\n", cfg)
@@ -92,5 +94,6 @@ func init() {
 	bootstrapCmd.Flags().BoolVar(&bootstrapDotfilesApply, "dotfiles-apply", false, "Apply dotfiles to rootfs home directory at the end of bootstrap")
 	bootstrapCmd.Flags().StringVar(&bootstrapDotfilesSource, "dotfiles-source", "", "Git URL or local path for external dotfiles repository")
 	bootstrapCmd.Flags().StringVar(&bootstrapConfigsDir, "configs-dir", "", "Path to the configs/ directory with embedded dotfiles")
+	bootstrapCmd.Flags().StringVar(&bootstrapAutologinUser, "autologin-user", "", "Username for automatic login on tty1 (getty autologin)")
 	rootCmd.AddCommand(bootstrapCmd)
 }

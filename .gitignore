@@ -32,3 +32,10 @@ Thumbs.db
 
 # Node / Scripts
 scripts/node_modules/
+
+# Ferramentas de agentes
+.opencode/
+.task-state.json
+opencode.json
+AGENTS.md
+rules/

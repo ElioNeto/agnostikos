@@ -1,0 +1,56 @@
+# desktop.yaml — Perfil de ambiente gráfico mínimo
+#
+# Este perfil instala um ambiente Wayland com Hyprland e aplicativos
+# essenciais para desenvolvimento.
+#
+# Use: agnostic install --profile desktop
+
+# Pacotes do perfil desktop
+packages:
+  # Compositor Wayland
+  - hyprland
+
+  # Barra de status
+  - waybar
+
+  # Lançador de aplicativos
+  - rofi-wayland
+
+  # Terminal
+  - alacritty
+
+  # Gerenciador de arquivos no terminal
+  - yazi
+
+  # Notificações
+  - dunst
+
+  # Screenshots
+  - grimblast
+
+  # Wallpaper
+  - hyprpaper
+
+  # Fontes
+  - noto-fonts
+  - ttf-jetbrains-mono
+
+  # Ícones
+  - papirus-icon-theme
+
+  # Polkit (autenticação gráfica)
+  - polkit-kde-agent
+
+  # Portal XDG (compartilhamento de tela/pastas)
+  - xdg-desktop-portal-hyprland
+
+  # Áudio
+  - pipewire
+  - wireplumber
+
+  # Rede
+  - networkmanager
+
+  # Bluetooth
+  - bluez
+  - bluez-utils

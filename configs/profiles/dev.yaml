@@ -1,0 +1,67 @@
+# dev.yaml — Perfil de desenvolvimento completo
+#
+# Este perfil instala ferramentas modernas para desenvolvimento de software:
+# runtimes, editores, utilitários CLI, containers, e ferramentas de rede/segurança.
+#
+# Use: agnostic install --profile dev
+
+# Pacotes do perfil dev
+packages:
+  # ---- Shell / Terminal ----
+  - zsh              # Shell poderoso com autocompletar e plugins
+  - starship         # Prompt minimalista, rápido e customizável
+  - fzf              # Fuzzy finder para arquivos, histórico, processos
+  - tmux             # Multiplexador de terminal (várias sessões em uma janela)
+  - alacritty        # Terminal acelerado por GPU, configurado via TOML
+
+  # ---- Version Control ----
+  - git              # Sistema de controle de versão distribuído
+  - lazygit          # Interface TUI para git (diff, commit, branch com atalhos)
+  - gh               # GitHub CLI (issues, PRs, releases pelo terminal)
+  - delta            # Diff viewer com sintaxe colorida (paginator para git diff)
+
+  # ---- Runtimes / Language Toolchains ----
+  - mise             # Gerenciador de versões de runtime (Node, Python, Ruby, Java)
+  - rustup           # Instalador e versionador do Rust (rustc, cargo)
+  - go               # Linguagem Go compilada (binários estáticos, goroutines)
+
+  # ---- Containers / Virtualização ----
+  - docker           # Container runtime e orquestração
+  - docker-compose   # Orquestração multi-container (YAML)
+  - podman           # Alternativa rootless ao Docker (daemonless)
+  - distrobox        # Cria containers com distribuição completa (integração com host)
+
+  # ---- Editores / IDEs ----
+  - neovim           # Editor de texto extensível (Lua, LSP, Tree-sitter)
+  - helix            # Editor modal nativo com LSP embutido (Rust)
+
+  # ---- Modern Utils (GNU replacements) ----
+  - eza              # ls moderno com ícones, cores, árvore
+  - bat              # cat com syntax highlight, line numbers, git gutter
+  - ripgrep          # grep recursivo extremamente rápido (regex)
+  - fd               # find simples e rápido com sintaxe intuitiva
+  - zoxide           # cd inteligente que aprende diretórios mais usados
+  - dust             # du visual com gráfico de barras
+  - procs            # ps moderno com tree view, cores, busca
+  - httpie           # curl humano: JSON formatado, cores, sessões
+  - yazi             # Gerenciador de arquivos TUI (Vim keybindings)
+
+  # ---- Network / Debug ----
+  - curl             # Transferência de dados via URL (HTTP, FTP, etc.)
+  - wget             # Download recursivo de arquivos (HTTP, FTP)
+  - nmap             # Scanner de portas e descoberta de rede
+  - netcat           # Ferramenta TCP/IP para debugging de conexões
+  - mkcert           # Cria certificados SSL/TLS locais confiáveis
+  - wireshark        # Analisador de pacotes de rede (GUI)
+
+  # ---- Observabilidade / System ----
+  - btop             # Monitor de sistema com CPU, RAM, disco, processos (TUI)
+  - strace           # Rastreia syscalls de processos Linux
+  - lsof             # Lista arquivos abertos por processo/socket
+  - perf             # Profiler de CPU do kernel Linux (perf_events)
+
+  # ---- Segurança / Criptografia ----
+  - gnupg            # Implementação OpenPGP (assinatura, cifragem, chaves)
+  - pass             # Gerenciador de senhas via GPG (standard UNIX)
+  - age              # Criptografia moderna (substituto do OpenPGP simples)
+  - openssh          # Conexão remota segura (SSH client & server)

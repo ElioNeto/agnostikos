@@ -1,0 +1,257 @@
+/* =============================================================================
+ * Waybar Styling — Tokyo Night Theme
+ * ============================================================================= */
+
+@define-color bg #1a1b26;
+@define-color fg #c0caf5;
+@define-color blue #7aa2f7;
+@define-color cyan #7dcfff;
+@define-color green #9ece6a;
+@define-color orange #ff9e64;
+@define-color pink #bb9af7;
+@define-color red #f7768e;
+@define-color yellow #e0af68;
+@define-color teal #1abc9c;
+@define-color surface #24283b;
+@define-color surface2 #2f3346;
+
+* {
+    border: none;
+    border-radius: 0;
+    font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", "FiraCode Nerd Font", monospace;
+    font-size: 13px;
+    min-height: 0;
+}
+
+window#waybar {
+    background: @bg;
+    color: @fg;
+    border-bottom: 1px solid @surface2;
+    transition-property: background, color;
+    transition-duration: 0.2s;
+}
+
+/* ---------------------------------------------------------------------------
+ * Workspaces
+ * ------------------------------------------------------------------------- */
+#workspaces {
+    background: @surface;
+    margin: 3px 4px;
+    padding: 0 4px;
+    border-radius: 8px;
+}
+
+#workspaces button {
+    padding: 0 6px;
+    margin: 3px 2px;
+    color: @fg;
+    background: transparent;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+#workspaces button:hover {
+    background: @surface2;
+    color: @blue;
+    box-shadow: none;
+    text-shadow: none;
+}
+
+#workspaces button.active {
+    background: @blue;
+    color: @bg;
+    font-weight: bold;
+}
+
+#workspaces button.urgent {
+    background: @red;
+    color: @bg;
+}
+
+#workspaces button.empty {
+    color: @surface2;
+}
+
+/* ---------------------------------------------------------------------------
+ * Clock
+ * ------------------------------------------------------------------------- */
+#clock {
+    background: @surface;
+    color: @fg;
+    margin: 3px 4px;
+    padding: 0 12px;
+    border-radius: 8px;
+    font-weight: bold;
+}
+
+/* ---------------------------------------------------------------------------
+ * CPU
+ * ------------------------------------------------------------------------- */
+#cpu {
+    background: @surface;
+    color: @cyan;
+    margin: 3px 2px;
+    padding: 0 8px;
+    border-radius: 8px;
+}
+
+#cpu.warning {
+    color: @orange;
+}
+
+#cpu.critical {
+    color: @red;
+}
+
+/* ---------------------------------------------------------------------------
+ * Memory
+ * ------------------------------------------------------------------------- */
+#memory {
+    background: @surface;
+    color: @green;
+    margin: 3px 2px;
+    padding: 0 8px;
+    border-radius: 8px;
+}
+
+#memory.warning {
+    color: @orange;
+}
+
+#memory.critical {
+    color: @red;
+}
+
+/* ---------------------------------------------------------------------------
+ * Disk
+ * ------------------------------------------------------------------------- */
+#disk {
+    background: @surface;
+    color: @teal;
+    margin: 3px 2px;
+    padding: 0 8px;
+    border-radius: 8px;
+}
+
+#disk.warning {
+    color: @orange;
+}
+
+/* ---------------------------------------------------------------------------
+ * Network
+ * ------------------------------------------------------------------------- */
+#network {
+    background: @surface;
+    color: @blue;
+    margin: 3px 2px;
+    padding: 0 8px;
+    border-radius: 8px;
+}
+
+#network.disconnected {
+    color: @red;
+}
+
+/* ---------------------------------------------------------------------------
+ * Bluetooth
+ * ------------------------------------------------------------------------- */
+#bluetooth {
+    background: @surface;
+    color: @blue;
+    margin: 3px 2px;
+    padding: 0 8px;
+    border-radius: 8px;
+}
+
+#bluetooth.disabled {
+    color: @surface2;
+}
+
+/* ---------------------------------------------------------------------------
+ * PulseAudio
+ * ------------------------------------------------------------------------- */
+#pulseaudio {
+    background: @surface;
+    color: @fg;
+    margin: 3px 2px;
+    padding: 0 8px;
+    border-radius: 8px;
+}
+
+#pulseaudio.muted {
+    color: @red;
+}
+
+#pulseaudio.bluetooth {
+    color: @blue;
+}
+
+/* ---------------------------------------------------------------------------
+ * Battery
+ * ------------------------------------------------------------------------- */
+#battery {
+    background: @surface;
+    color: @green;
+    margin: 3px 2px;
+    padding: 0 8px;
+    border-radius: 8px;
+}
+
+#battery.warning {
+    color: @orange;
+}
+
+#battery.critical {
+    color: @red;
+}
+
+#battery.charging {
+    color: @green;
+}
+
+/* ---------------------------------------------------------------------------
+ * Tray
+ * ------------------------------------------------------------------------- */
+#tray {
+    background: @surface;
+    margin: 3px 2px;
+    padding: 0 6px;
+    border-radius: 8px;
+}
+
+#tray > .passive {
+    -gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+    -gtk-icon-effect: highlight;
+}
+
+/* ---------------------------------------------------------------------------
+ * Custom Exit Button
+ * ------------------------------------------------------------------------- */
+#custom-exit {
+    background: @red;
+    color: @bg;
+    margin: 3px 4px;
+    padding: 0 10px;
+    border-radius: 8px;
+    font-weight: bold;
+}
+
+#custom-exit:hover {
+    background: #ff6b81;
+}
+
+/* ---------------------------------------------------------------------------
+ * Tooltip
+ * ------------------------------------------------------------------------- */
+tooltip {
+    background: @bg;
+    border: 1px solid @surface2;
+    border-radius: 8px;
+}
+
+tooltip label {
+    color: @fg;
+}

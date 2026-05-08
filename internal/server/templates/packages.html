@@ -1,0 +1,92 @@
+{{define "content"}}
+<h1 style="margin-bottom:1.5rem; font-size:1.75rem; font-weight:700;">Package Manager</h1>
+
+<div class="card">
+  <h2>Search & Filter</h2>
+  <div class="flex" style="flex-wrap:wrap; gap:0.75rem;">
+    <div class="form-group" style="flex:1; min-width:200px;">
+      <label for="search-q">Package Name</label>
+      <input type="text" id="search-q" name="q" placeholder="e.g. firefox"
+             hx-get="/api/packages/table"
+             hx-trigger="keyup changed delay:500ms, search"
+             hx-target="#packages-table"
+             hx-include="#backend-select"
+             hx-swap="outerHTML">
+    </div>
+    <div class="form-group">
+      <label for="backend-select">Backend</label>
+      <select id="backend-select" name="backend"
+              hx-get="/api/packages/table"
+              hx-trigger="change"
+              hx-target="#packages-table"
+              hx-include="#search-q"
+              hx-swap="outerHTML">
+        <option value="">All backends</option>
+        {{range .Backends}}
+        <option value="{{.}}">{{.}}</option>
+        {{end}}
+      </select>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Installed / Available Packages</h2>
+  <div id="packages-table" hx-get="/api/packages/table" hx-trigger="load">
+    <p style="color:#64748b;">Loading packages...</p>
+  </div>
+</div>
+
+<div class="card">
+  <h2>System Update</h2>
+  <p style="color:#94a3b8; font-size:0.875rem; margin-bottom:1rem;">
+    Update all packages across all backends.
+  </p>
+  <button id="update-btn"
+          hx-post="/api/packages/update"
+          hx-swap="none"
+          hx-headers='{"Content-Type":"application/json"}'
+          hx-vals='{"backend":""}'
+          _="on htmx:afterRequest if response.status == 200 then
+             put 'Update triggered!' into #update-status
+             else put 'Update failed' into #update-status">
+    🔄 Update All
+  </button>
+  <p id="update-status" style="margin-top:0.5rem; font-size:0.875rem; color:#64748b;"></p>
+</div>
+
+<script>
+  // Handle install/remove actions via HTMX
+  document.body.addEventListener('htmx:afterRequest', function(evt) {
+    if (evt.detail.target && evt.detail.target.id === 'packages-table') {
+      return; // already handled
+    }
+    if (evt.detail.requestConfig && evt.detail.requestConfig.verb === 'post' &&
+        evt.detail.requestConfig.path === '/api/packages/install') {
+      if (evt.detail.successful) {
+        refreshPackages();
+      }
+    }
+  });
+
+  function refreshPackages() {
+    htmx.ajax('GET', '/api/packages/table', {target: '#packages-table', swap: 'outerHTML'});
+  }
+
+  function installPackage(name, backend) {
+    htmx.ajax('POST', '/api/packages/install', {
+      values: {name: name, backend: backend},
+      target: '#packages-table',
+      swap: 'none'
+    });
+  }
+
+  function removePackage(name, backend) {
+    if (!confirm('Remove ' + name + '?')) return;
+    htmx.ajax('DELETE', '/api/packages/' + name + '?backend=' + backend, {
+      target: '#packages-table',
+      swap: 'none'
+    });
+  }
+</script>
+{{end}}

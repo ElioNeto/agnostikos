@@ -25,6 +25,8 @@ func setupTestDirs(t *testing.T) (configsDir, homeDir string, cleanup func()) {
 		"starship",
 		"alacritty",
 		"tmux",
+		"hyprland",
+		"waybar",
 	}
 	for _, d := range dirs {
 		if err := os.MkdirAll(filepath.Join(configsDir, d), 0755); err != nil {
@@ -42,6 +44,9 @@ func setupTestDirs(t *testing.T) (configsDir, homeDir string, cleanup func()) {
 		"starship/starship.toml":  "format = \"test\"\n",
 		"alacritty/alacritty.toml": "[font]\nsize = 12\n",
 		"tmux/.tmux.conf":         "set -g mouse on\n",
+		"hyprland/hyprland.conf":  "monitor=,preferred,auto,1\n",
+		"waybar/config":           "{\n  \"layer\": \"top\"\n}\n",
+		"waybar/style.css":        "* { font-family: sans-serif; }\n",
 	}
 	for rel, content := range stubs {
 		path := filepath.Join(configsDir, rel)
@@ -76,6 +81,9 @@ func TestApply_CreatesSymlinks(t *testing.T) {
 		".config/starship.toml":     "starship/starship.toml",
 		".config/alacritty/alacritty.toml": "alacritty/alacritty.toml",
 		".tmux.conf":                "tmux/.tmux.conf",
+		".config/hypr/hyprland.conf": "hyprland/hyprland.conf",
+		".config/waybar/config":     "waybar/config",
+		".config/waybar/style.css":  "waybar/style.css",
 	}
 
 	for destRel, srcRel := range expected {
@@ -193,9 +201,12 @@ func TestList_ReturnsExpectedEntries(t *testing.T) {
 		"alacritty/alacritty.toml",
 		"git/.gitconfig",
 		"git/.gitignore_global",
+		"hyprland/hyprland.conf",
 		"neovim/init.lua",
 		"starship/starship.toml",
 		"tmux/.tmux.conf",
+		"waybar/config",
+		"waybar/style.css",
 		"zsh/.zshenv",
 		"zsh/.zshrc",
 	}
