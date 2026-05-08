@@ -82,13 +82,9 @@ func sourcesDir(rootfsDir string) string {
 	return filepath.Join(base, "sources")
 }
 
-// tmpDir retorna /mnt/data/agnostikOS/tmp
+// tmpDir retorna um diretório temporário sob o temp dir do sistema
 func tmpDir() string {
-	base := BaseDir
-	if v := os.Getenv("AGNOSTICOS_ROOT"); v != "" {
-		base = filepath.Dir(v)
-	}
-	return filepath.Join(base, "tmp")
+	return filepath.Join(os.TempDir(), "agnostikos-tmp")
 }
 
 // artifactExists retorna true se o caminho dado já existir no disco.
