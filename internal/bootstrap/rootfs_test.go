@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -23,9 +24,16 @@ func TestResolveTarget_EnvVar(t *testing.T) {
 }
 
 func TestResolveTarget_Default(t *testing.T) {
-	_ = os.Unsetenv("AGNOSTICOS_ROOT")
+	t.Setenv("AGNOSTICOS_ROOT", "")
 	if got := resolveTarget(""); got != DefaultRoot {
 		t.Errorf("expected %s, got %s", DefaultRoot, got)
+	}
+}
+
+func TestResolveTarget_ArgOverridesEnv(t *testing.T) {
+	t.Setenv("AGNOSTICOS_ROOT", "/from-env")
+	if got := resolveTarget("/from-arg"); got != "/from-arg" {
+		t.Errorf("expected /from-arg, got %s", got)
 	}
 }
 
@@ -287,7 +295,7 @@ func TestHasShellEntry(t *testing.T) {
 		{name: "found single line", content: "/bin/zsh\n", shell: "/bin/zsh", want: true},
 		{name: "not found", content: "/bin/bash\n/bin/dash\n", shell: "/bin/zsh", want: false},
 		{name: "empty content", content: "", shell: "/bin/zsh", want: false},
-		{name: "trailing space no match", content: "/bin/zsh \n", shell: "/bin/zsh", want: false},
+		{name: "trailing space matched after trim", content: "/bin/zsh \n", shell: "/bin/zsh", want: true},
 		{name: "partial path no match", content: "/bin/zsh-stuff\n", shell: "/bin/zsh", want: false},
 	}
 	for _, tt := range tests {
@@ -303,6 +311,61 @@ func TestHasShellEntry(t *testing.T) {
 // ---------------------------------------------------------------------------
 // configureAutologin
 // ---------------------------------------------------------------------------
+
+// TestConfigureAutologin_MkdirError tests error handling when the drop-in directory
+// cannot be created (e.g., etc/systemd is a file instead of directory).
+func TestConfigureAutologin_MkdirError(t *testing.T) {
+	tmp := t.TempDir()
+
+	// Make etc/systemd a file so MkdirAll on the drop-in path fails with ENOTDIR
+	systemdPath := filepath.Join(tmp, "etc", "systemd")
+	if err := os.MkdirAll(filepath.Dir(systemdPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(systemdPath, []byte("not-a-directory"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := configureAutologin(tmp, "root")
+	if err == nil {
+		t.Fatal("expected error when etc/systemd is a file")
+	}
+	if !strings.Contains(err.Error(), "mkdir getty drop-in") {
+		t.Errorf("expected 'mkdir getty drop-in' error, got: %v", err)
+	}
+}
+
+// TestSetupMiseRuntimes_MkdirError tests error handling when profile.d cannot be created.
+func TestSetupMiseRuntimes_MkdirError(t *testing.T) {
+	tmp := t.TempDir()
+
+	// Create mise binary
+	miseBin := filepath.Join(tmp, "usr", "bin", "mise")
+	if err := os.MkdirAll(filepath.Dir(miseBin), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(miseBin, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make etc a file so MkdirAll on etc/profile.d fails (etc is not a directory)
+	etcPath := filepath.Join(tmp, "etc")
+	if err := os.RemoveAll(etcPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(etcPath, []byte("not-a-directory"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should not panic
+	setupMiseRuntimes(tmp, []string{"nodejs@lts"})
+
+	// Verify mise.sh was NOT created (because etc is a file, profile.d can't be created)
+	miseShPath := filepath.Join(tmp, "etc", "profile.d", "mise.sh")
+	if _, err := os.Stat(miseShPath); err == nil {
+		t.Error("mise.sh should not be created when etc is a file")
+	}
+}
 
 func TestConfigureAutologin(t *testing.T) {
 	tests := []struct {
@@ -373,6 +436,28 @@ func TestSetupMiseRuntimes_MissingMise(t *testing.T) {
 	profilePath := filepath.Join(tmp, "etc", "profile.d", "mise.sh")
 	if _, err := os.Stat(profilePath); err == nil {
 		t.Error("mise.sh should not be created when mise binary is missing")
+	}
+}
+
+func TestSetupMiseRuntimes_InstallFails(t *testing.T) {
+	tmp := t.TempDir()
+
+	// Create a fake mise binary that fails
+	miseBin := filepath.Join(tmp, "usr", "bin", "mise")
+	if err := os.MkdirAll(filepath.Dir(miseBin), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(miseBin, []byte("#!/bin/sh\nexit 1\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should not panic when install fails
+	setupMiseRuntimes(tmp, []string{"nodejs@lts"})
+
+	// Verify profile script was still created
+	profilePath := filepath.Join(tmp, "etc", "profile.d", "mise.sh")
+	if _, err := os.Stat(profilePath); os.IsNotExist(err) {
+		t.Error("mise.sh should be created even when install fails")
 	}
 }
 
@@ -475,6 +560,15 @@ func TestSourcesDir(t *testing.T) {
 			t.Errorf("sourcesDir with env = %s; want %s", got, want)
 		}
 	})
+
+	t.Run("empty rootfsDir with AGNOSTICOS_ROOT env var", func(t *testing.T) {
+		t.Setenv("AGNOSTICOS_ROOT", "/another/env/rootfs")
+		got := sourcesDir("") // empty, falls to env
+		want := filepath.Join("/another/env", "sources")
+		if got != want {
+			t.Errorf("sourcesDir('') with env = %s; want %s", got, want)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -509,6 +603,27 @@ func TestDownloadFile_Success(t *testing.T) {
 	}
 }
 
+func TestDownloadFile_CreateFileError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("content"))
+	}))
+	defer server.Close()
+
+	origHTTP := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() { httpClient = origHTTP })
+
+	// dest path is in a non-existent directory, so os.Create will fail
+	tmp := t.TempDir()
+	dest := filepath.Join(tmp, "nonexistent", "file")
+
+	err := downloadFile(dest, server.URL)
+	if err == nil {
+		t.Fatal("expected error when dest directory does not exist")
+	}
+}
+
 func TestDownloadFile_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -528,6 +643,52 @@ func TestDownloadFile_HTTPError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unexpected status") {
 		t.Errorf("expected 'unexpected status' error, got: %v", err)
+	}
+}
+
+// errReader simulates an io.ReadCloser that reads some data then returns an error.
+type errReader struct {
+	data []byte
+	err  error
+}
+
+func (r *errReader) Read(p []byte) (int, error) {
+	if len(r.data) == 0 {
+		return 0, r.err
+	}
+	n := copy(p, r.data)
+	r.data = r.data[n:]
+	return n, nil
+}
+
+func (r *errReader) Close() error { return nil }
+
+// errRoundTripper returns a response whose body will fail during io.Copy.
+type errRoundTripper struct{}
+
+func (e *errRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body: &errReader{
+			data: []byte("short"),
+			err:  errors.New("simulated read error"),
+		},
+		ContentLength: -1,
+		Request:       req,
+	}, nil
+}
+
+func TestDownloadFile_IOCopyError(t *testing.T) {
+	origHTTP := httpClient
+	httpClient = &http.Client{Transport: &errRoundTripper{}}
+	t.Cleanup(func() { httpClient = origHTTP })
+
+	tmp := t.TempDir()
+	dest := filepath.Join(tmp, "downloaded")
+
+	err := downloadFile(dest, "http://example.com/file")
+	if err == nil {
+		t.Fatal("expected error from io.Copy failure")
 	}
 }
 
@@ -576,6 +737,123 @@ func TestCreateRootFS(t *testing.T) {
 // ---------------------------------------------------------------------------
 // UnmountVirtualFS
 // ---------------------------------------------------------------------------
+
+// TestConfigureDefaultShell_ReadShellsError tests the error path when /etc/shells
+// exists but is not readable (e.g., is a directory).
+func TestConfigureDefaultShell_ReadShellsError(t *testing.T) {
+	tmp := t.TempDir()
+
+	// Create /bin/zsh so function proceeds past the first check
+	zshPath := filepath.Join(tmp, "bin", "zsh")
+	if err := os.MkdirAll(filepath.Dir(zshPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(zshPath, []byte("#!/bin/sh\nexit 0"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make etc/shells a directory so ReadFile returns EISDIR (not IsNotExist)
+	shellsPath := filepath.Join(tmp, "etc", "shells")
+	if err := os.MkdirAll(shellsPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	err := configureDefaultShell(tmp)
+	if err == nil {
+		t.Fatal("expected error when /etc/shells is a directory")
+	}
+	if !strings.Contains(err.Error(), "read /etc/shells") {
+		t.Errorf("expected 'read /etc/shells' error, got: %v", err)
+	}
+}
+
+// TestConfigureDefaultShell_WritePasswdError tests the error path when /etc/passwd
+// cannot be written (read-only file).
+func TestConfigureDefaultShell_WritePasswdError(t *testing.T) {
+	// Skip on Windows where file permissions work differently
+	tmp := t.TempDir()
+
+	// Create /bin/zsh
+	zshPath := filepath.Join(tmp, "bin", "zsh")
+	if err := os.MkdirAll(filepath.Dir(zshPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(zshPath, []byte("#!/bin/sh\nexit 0"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create /etc/shells so the shells step succeeds
+	shellsPath := filepath.Join(tmp, "etc", "shells")
+	if err := os.MkdirAll(filepath.Dir(shellsPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(shellsPath, []byte("/bin/bash\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create /etc/passwd as a read-only file so ReadFile succeeds but WriteFile fails
+	passwdPath := filepath.Join(tmp, "etc", "passwd")
+	if err := os.MkdirAll(filepath.Dir(passwdPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(passwdPath, []byte("root:x:0:0:root:/root:/bin/sh\n"), 0444); err != nil {
+		t.Fatal(err)
+	}
+
+	err := configureDefaultShell(tmp)
+	if err == nil {
+		t.Fatal("expected error when /etc/passwd is read-only")
+	}
+	if !strings.Contains(err.Error(), "write /etc/passwd") {
+		t.Errorf("expected 'write /etc/passwd' error, got: %v", err)
+	}
+}
+
+// TestConfigureDefaultShell_NoRootEntry tests adding a root entry when none exists.
+func TestConfigureDefaultShell_NoRootEntry(t *testing.T) {
+	tmp := t.TempDir()
+
+	// Create /bin/zsh
+	zshPath := filepath.Join(tmp, "bin", "zsh")
+	if err := os.MkdirAll(filepath.Dir(zshPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(zshPath, []byte("#!/bin/sh\nexit 0"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create /etc/shells
+	shellsPath := filepath.Join(tmp, "etc", "shells")
+	if err := os.MkdirAll(filepath.Dir(shellsPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(shellsPath, []byte("/bin/sh\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create /etc/passwd WITHOUT a root entry
+	passwdPath := filepath.Join(tmp, "etc", "passwd")
+	if err := os.MkdirAll(filepath.Dir(passwdPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(passwdPath, []byte("nobody:x:65534:65534:nobody:/nonexistent:/bin/false\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := configureDefaultShell(tmp)
+	if err != nil {
+		t.Fatalf("configureDefaultShell failed: %v", err)
+	}
+
+	// Verify root entry was appended with /bin/zsh
+	data, err := os.ReadFile(passwdPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "root:x:0:0:root:/root:/bin/zsh") {
+		t.Errorf("expected root entry with /bin/zsh, got: %s", string(data))
+	}
+}
 
 func TestUnmountVirtualFS(t *testing.T) {
 	tmp := t.TempDir()

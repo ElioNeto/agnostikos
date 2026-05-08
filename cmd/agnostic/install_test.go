@@ -21,19 +21,4 @@ func TestInstallCmd_ValidBackend(t *testing.T) {
 	_ = rootCmd.Execute()
 }
 
-func TestListCmd_InvalidBackend(t *testing.T) {
-	rootCmd.SetArgs([]string{"list", "--backend", "xyz"})
-	err := rootCmd.Execute()
-	if err == nil {
-		t.Error("expected error for invalid backend, got nil")
-	}
-}
 
-func TestListCmd_ValidBackend(t *testing.T) {
-	rootCmd.SetArgs([]string{"list", "--backend", "pacman"})
-	err := rootCmd.Execute()
-	// May fail if pacman not installed, but should not return "backend not found"
-	if err != nil && err.Error() == "backend 'pacman' not found" {
-		t.Fatal("backend 'pacman' should be registered")
-	}
-}

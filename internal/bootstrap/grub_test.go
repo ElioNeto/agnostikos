@@ -96,6 +96,55 @@ func TestInstallGRUB_UEFIMode(t *testing.T) {
 	}
 }
 
+func TestFindMountPoint_KnownDevice(t *testing.T) {
+	// /proc is always mounted as "proc" on Linux
+	mountPoint, err := findMountPoint("proc")
+	if err != nil {
+		t.Fatalf("findMountPoint('proc') error: %v", err)
+	}
+	if mountPoint == "" {
+		t.Error("findMountPoint('proc') returned empty — expected '/proc' or similar")
+	}
+}
+
+func TestFindMountPoint_UnknownDevice(t *testing.T) {
+	mountPoint, err := findMountPoint("nonexistent-device-name-12345")
+	if err != nil {
+		t.Fatalf("findMountPoint('nonexistent-device-name-12345') error: %v", err)
+	}
+	if mountPoint != "" {
+		t.Errorf("findMountPoint('nonexistent') = %q; want empty string", mountPoint)
+	}
+}
+
+func TestHasGrubInstall_Found(t *testing.T) {
+	// Create a fake grub-install in a temp dir and add it to PATH
+	tmp := t.TempDir()
+	fakePath := filepath.Join(tmp, "grub-install")
+	if err := os.WriteFile(fakePath, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	origPath := os.Getenv("PATH")
+	t.Cleanup(func() { os.Setenv("PATH", origPath) })
+	os.Setenv("PATH", tmp+string(os.PathListSeparator)+origPath)
+
+	if !hasGrubInstall() {
+		t.Error("hasGrubInstall() should return true when grub-install is in PATH")
+	}
+}
+
+func TestHasGrubInstall_NotFound(t *testing.T) {
+	// Temporarily set PATH to an empty directory so exec.LookPath fails
+	origPath := os.Getenv("PATH")
+	t.Cleanup(func() { os.Setenv("PATH", origPath) })
+	os.Setenv("PATH", "/dev/null") // not a directory, LookPath will fail
+
+	if hasGrubInstall() {
+		t.Error("hasGrubInstall() should return false when grub-install is not in PATH")
+	}
+}
+
 func TestInstallGRUB_EmptyRootfs(t *testing.T) {
 	err := InstallGRUB(context.Background(), GRUBConfig{
 		RootfsDir: "",

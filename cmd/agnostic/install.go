@@ -167,35 +167,11 @@ Otherwise, install a single package specified as argument.`,
 	},
 }
 
-var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List installed packages in the specified backend",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		mgr := manager.NewAgnosticManager()
-		svc, ok := mgr.Backends[backend]
-		if !ok {
-			return fmt.Errorf("backend '%s' not found", backend)
-		}
-		fmt.Printf("📋 Listing installed packages via %s...\n", backend)
-		results, err := svc.List()
-		if err != nil {
-			return fmt.Errorf("list failed: %w", err)
-		}
-		for _, r := range results {
-			fmt.Println(r)
-		}
-		return nil
-	},
-}
-
 func init() {
-	for _, cmd := range []*cobra.Command{installCmd, listCmd} {
-		cmd.Flags().StringVarP(&backend, "backend", "b", "pacman", "Backend to use (pacman, nix, flatpak)")
-	}
+	installCmd.Flags().StringVarP(&backend, "backend", "b", "pacman", "Backend to use (pacman, nix, flatpak)")
 	installCmd.Flags().BoolVarP(&isolated, "isolated", "i", false, "Run in isolated Linux namespace")
 	installCmd.Flags().StringVarP(&profile, "profile", "p", "", "Profile to install (minimal, desktop, server, dev)")
-	rootCmd.AddCommand(installCmd, listCmd)
+	rootCmd.AddCommand(installCmd)
 }
 
 func backendInstallArgs(backend, pkg string) ([]string, error) {

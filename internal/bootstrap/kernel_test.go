@@ -110,6 +110,21 @@ func TestKernelArch(t *testing.T) {
 	}
 }
 
+func TestAutoDetectArch_Custom(t *testing.T) {
+	got := autoDetectArch(KernelConfig{Arch: "arm64"})
+	if got != "arm64" {
+		t.Errorf("autoDetectArch({Arch: 'arm64'}) = %q; want 'arm64'", got)
+	}
+}
+
+func TestAutoDetectArch_Empty(t *testing.T) {
+	got := autoDetectArch(KernelConfig{})
+	// On a real system, this will match runtime.GOARCH
+	if got == "" {
+		t.Error("autoDetectArch({}) returned empty")
+	}
+}
+
 func TestKernelArch_Default(t *testing.T) {
 	// Default case (any unknown arch) should use x86_64
 	gotKarch, gotDefconfig, gotImagePath := kernelArch("unknown")
@@ -121,6 +136,43 @@ func TestKernelArch_Default(t *testing.T) {
 	}
 	if gotImagePath != "arch/x86/boot/bzImage" {
 		t.Errorf("kernelArch('unknown') imagePath = %q; want 'arch/x86/boot/bzImage'", gotImagePath)
+	}
+}
+
+func TestApplyKernelConfigMerge_WriteFragmentError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Make kernel-config-minimal.config a directory so WriteFile fails
+	fragmentPath := filepath.Join(tmpDir, "kernel-config-minimal.config")
+	if err := os.MkdirAll(fragmentPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// .config not needed because write fragment fails first
+	err := applyKernelConfigFragment(tmpDir, "x86_64")
+	if err == nil {
+		t.Fatal("expected error when fragment path is a directory")
+	}
+	if !strings.Contains(err.Error(), "write config fragment") {
+		t.Errorf("expected 'write config fragment' error, got: %v", err)
+	}
+}
+
+func TestApplyKernelConfigMerge_MissingMergeScript(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create .config but DON'T create scripts/kconfig/merge_config.sh
+	if err := os.WriteFile(filepath.Join(tmpDir, ".config"), []byte("CONFIG_EXPERT=y\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should fail because merge_config.sh doesn't exist
+	err := applyKernelConfigFragment(tmpDir, "x86_64")
+	if err == nil {
+		t.Fatal("expected error when merge_config.sh is missing")
+	}
+	if !strings.Contains(err.Error(), "merge config fragment") {
+		t.Errorf("expected 'merge config fragment' error, got: %v", err)
 	}
 }
 

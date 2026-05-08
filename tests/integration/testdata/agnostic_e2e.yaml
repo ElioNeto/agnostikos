@@ -1,0 +1,17 @@
+version: "1"
+profile: dev
+locale: en_US.UTF-8
+timezone: UTC
+packages:
+  base:
+    - base
+    - linux-firmware
+  extra:
+    - htop
+    - curl
+backends:
+  default: pacman
+  fallback: flatpak
+user:
+  name: testuser
+  shell: /bin/zsh

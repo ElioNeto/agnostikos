@@ -151,6 +151,52 @@ func TestFindVmlinuz_NotFound(t *testing.T) {
 	}
 }
 
+func TestCreateInitramfs_NonTestMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	output := filepath.Join(tmpDir, "initramfs-non-test.img")
+
+	err := createinitramfs(output, false)
+	if err != nil {
+		t.Fatalf("createinitramfs(testMode=false) failed: %v", err)
+	}
+
+	// Verify the output file exists and is non-empty
+	info, err := os.Stat(output)
+	if err != nil {
+		t.Fatalf("stat initramfs: %v", err)
+	}
+	if info.Size() == 0 {
+		t.Fatal("non-test initramfs is empty")
+	}
+
+	// Verify it's a valid gzip file
+	data, err := os.ReadFile(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data) < 2 || data[0] != 0x1f || data[1] != 0x8b {
+		t.Error("output is not a valid gzip file (missing magic bytes)")
+	}
+
+	// Verify content contains the non-test init script
+	if cpioPath, err := exec.LookPath("cpio"); err == nil {
+		_ = cpioPath
+		cmd := exec.CommandContext(context.Background(), "sh", "-c",
+			"zcat "+output+" | cpio -t 2>/dev/null")
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("listing initramfs contents: %v", err)
+		}
+		listing := string(out)
+		if !strings.Contains(listing, "init") {
+			t.Error("initramfs missing /init script")
+		}
+		if !strings.Contains(listing, "mnt/root") {
+			t.Error("non-test initramfs should contain mnt/root directory")
+		}
+	}
+}
+
 func TestCreateInitramfs_TestMode(t *testing.T) {
 	if _, err := exec.LookPath("busybox"); err != nil {
 		t.Skip("busybox not available on this host — skipping test")
@@ -269,5 +315,33 @@ func TestGenerateISO_TestMode_Fallback(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "no vmlinuz") {
 		t.Errorf("expected 'no vmlinuz' error, got: %v", err)
+	}
+}
+
+func TestCreateInitramfs_CpioError(t *testing.T) {
+	// Use an output path in a non-existent directory so the cpio/gzip pipe fails
+	output := filepath.Join(t.TempDir(), "nonexistent-subdir", "initramfs.img")
+
+	err := createinitramfs(output, true)
+	if err == nil {
+		t.Fatal("expected error when output directory does not exist")
+	}
+	if !strings.Contains(err.Error(), "cpio") {
+		t.Errorf("expected error containing 'cpio', got: %v", err)
+	}
+}
+
+func TestRunGrubMkrescue_NotFound(t *testing.T) {
+	// Temporarily remove grub-mkrescue from PATH
+	origPath := os.Getenv("PATH")
+	t.Cleanup(func() { os.Setenv("PATH", origPath) })
+	os.Setenv("PATH", "/dev/null")
+
+	err := runGrubMkrescue("/tmp", ISOConfig{})
+	if err == nil {
+		t.Fatal("expected error when grub-mkrescue is not in PATH")
+	}
+	if !strings.Contains(err.Error(), "grub-mkrescue not found") {
+		t.Errorf("expected 'grub-mkrescue not found' error, got: %v", err)
 	}
 }

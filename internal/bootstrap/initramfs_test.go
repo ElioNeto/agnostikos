@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -73,17 +74,32 @@ func TestBuildInitramfs_InitScriptContent(t *testing.T) {
 	}
 }
 
+// TestBuildInitramfs_WithBusyboxCopy tests the busybox copy and symlink creation path.
+// The busybox binary is placed at the correct path: busybox-install/bin/busybox.
 func TestBuildInitramfs_WithBusyboxCopy(t *testing.T) {
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "initramfs.img")
 
-	// Create a busybox-install dir with a dummy file to verify it gets copied
-	busyboxDir := filepath.Join(tmpDir, "busybox-install")
-	if err := os.MkdirAll(busyboxDir, 0755); err != nil {
+	// Create a busybox binary at the correct path: busybox-install/bin/busybox
+	busyboxBinDir := filepath.Join(tmpDir, "busybox-install", "bin")
+	if err := os.MkdirAll(busyboxBinDir, 0755); err != nil {
 		t.Fatal(err)
 	}
 	dummyContent := []byte("busybox-binary-stub")
-	if err := os.WriteFile(filepath.Join(busyboxDir, "busybox"), dummyContent, 0755); err != nil {
+	bbPath := filepath.Join(busyboxBinDir, "busybox")
+	if err := os.WriteFile(bbPath, dummyContent, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Also create sbin/init and sbin/switch_root to test the sbin symlinks path
+	sbinDir := filepath.Join(tmpDir, "busybox-install", "sbin")
+	if err := os.MkdirAll(sbinDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sbinDir, "init"), dummyContent, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sbinDir, "switch_root"), dummyContent, 0755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -94,6 +110,30 @@ func TestBuildInitramfs_WithBusyboxCopy(t *testing.T) {
 
 	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
 		t.Fatal("initramfs output file was not created")
+	}
+
+	// Verify initramfs contains busybox and key symlinks
+	if cpioPath, err := exec.LookPath("cpio"); err == nil {
+		_ = cpioPath
+		cmd := exec.CommandContext(context.Background(), "sh", "-c",
+			"zcat "+outputPath+" | cpio -t 2>/dev/null")
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("listing initramfs contents: %v", err)
+		}
+		listing := string(out)
+		if !strings.Contains(listing, "bin/busybox") {
+			t.Error("initramfs missing bin/busybox")
+		}
+		if !strings.Contains(listing, "bin/sh") {
+			t.Error("initramfs missing bin/sh symlink")
+		}
+		if !strings.Contains(listing, "sbin/init") {
+			t.Error("initramfs missing sbin/init symlink")
+		}
+		if !strings.Contains(listing, "sbin/switch_root") {
+			t.Error("initramfs missing sbin/switch_root symlink")
+		}
 	}
 }
 

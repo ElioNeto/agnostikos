@@ -674,6 +674,68 @@ func TestBootstrapAll_SkipToolchainSkipsBuildSteps(t *testing.T) {
 	}
 }
 
+func TestBootstrapAll_AutoLoginAndMise(t *testing.T) {
+	tmpDir := t.TempDir()
+	rootfsDir := filepath.Join(tmpDir, "rootfs")
+
+	// Create /bin/zsh so configureDefaultShell doesn't skip
+	zshPath := filepath.Join(rootfsDir, "bin", "zsh")
+	if err := os.MkdirAll(filepath.Dir(zshPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(zshPath, []byte("#!/bin/sh\nexit 0"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create mise binary so setupMiseRuntimes proceeds
+	miseBin := filepath.Join(rootfsDir, "usr", "bin", "mise")
+	if err := os.MkdirAll(filepath.Dir(miseBin), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(miseBin, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Override execCommandContext to avoid real execution
+	origExec := execCommandContext
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "true")
+	}
+	t.Cleanup(func() { execCommandContext = origExec })
+
+	origToolchain := DefaultToolchain
+	DefaultToolchain = nil
+	t.Cleanup(func() { DefaultToolchain = origToolchain })
+
+	cfg := BootstrapConfig{
+		TargetDir:      rootfsDir,
+		SkipToolchain:  true,
+		SkipKernel:     true,
+		SkipBusybox:    true,
+		SkipInitramfs:  true,
+		SkipGRUB:       true,
+		AutoLoginUser:  "root",
+		MiseRuntimes:   []string{"nodejs@lts"},
+	}
+
+	err := BootstrapAll(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("BootstrapAll with autologin+mise failed: %v", err)
+	}
+
+	// Verify autologin drop-in was created
+	dropinPath := filepath.Join(rootfsDir, "etc", "systemd", "system", "getty@tty1.service.d", "autologin.conf")
+	if _, err := os.Stat(dropinPath); os.IsNotExist(err) {
+		t.Error("autologin drop-in should exist")
+	}
+
+	// Verify mise profile script was created
+	profilePath := filepath.Join(rootfsDir, "etc", "profile.d", "mise.sh")
+	if _, err := os.Stat(profilePath); os.IsNotExist(err) {
+		t.Error("mise.sh should exist")
+	}
+}
+
 func TestBootstrapAll_SkipToolchainFalseRunsBuildSteps(t *testing.T) {
 	tmpDir := t.TempDir()
 	rootfsDir := filepath.Join(tmpDir, "rootfs")
@@ -742,5 +804,41 @@ func TestBootstrapAll_SkipToolchainFalseRunsBuildSteps(t *testing.T) {
 	}
 	if !foundMake {
 		t.Error("expected make commands to be called when SkipToolchain=false")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// BootstrapAll with DotfilesApply
+// ---------------------------------------------------------------------------
+
+func TestBootstrapAll_DotfilesApply(t *testing.T) {
+	tmpDir := t.TempDir()
+	rootfsDir := filepath.Join(tmpDir, "rootfs")
+
+	origExec := execCommandContext
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "true")
+	}
+	t.Cleanup(func() { execCommandContext = origExec })
+
+	origToolchain := DefaultToolchain
+	DefaultToolchain = nil
+	t.Cleanup(func() { DefaultToolchain = origToolchain })
+
+	cfg := BootstrapConfig{
+		TargetDir:     rootfsDir,
+		SkipToolchain: true,
+		SkipKernel:    true,
+		SkipBusybox:   true,
+		SkipInitramfs: true,
+		SkipGRUB:      true,
+		DotfilesApply: true,
+		ConfigsDir:    filepath.Join(tmpDir, "nonexistent-configs"),
+	}
+
+	// Dotfiles.Apply handles missing configs gracefully (warns and skips)
+	err := BootstrapAll(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("BootstrapAll with DotfilesApply should succeed: %v", err)
 	}
 }
