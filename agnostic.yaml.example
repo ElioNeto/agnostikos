@@ -50,3 +50,18 @@ user:
   name: dev
   # Shell padrão do usuário.
   shell: /bin/zsh
+
+# [opcional] Gerenciamento de dotfiles.
+# Dois modos de uso:
+#   1. Local (source vazio): usa os dotfiles embutidos em configs/.
+#   2. Remoto (source definido): clona um repositório git de dotfiles.
+dotfiles:
+  # [opcional] URL git (https://, git@) ou caminho absoluto local.
+  # Exemplo: source: https://github.com/seuuser/dotfiles.git
+  # Se vazio, usa os dotfiles do pacote agnostikos (configs/).
+  # source:
+
+  # [opcional] Aplicar dotfiles automaticamente durante o bootstrap.
+  # Quando true, executa `agnostic dotfiles apply` ao final do bootstrap.
+  # Default: false
+  apply: true

@@ -1,0 +1,107 @@
+# =============================================================================
+# .gitignore_global — Global gitignore for common development artifacts
+# =============================================================================
+# Include this file via ~/.gitconfig:
+#   [core]
+#       excludesFile = ~/.gitignore_global
+
+# === Go ===
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.test
+/vendor/
+/coverage.txt
+/coverage.out
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.venv/
+env/
+venv/
+*.pyc
+
+# === Node / JavaScript ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.env
+.env.*
+.next/
+dist/
+build/
+.cache/
+coverage/
+
+# === Rust ===
+target/
+**/*.rs.bk
+Cargo.lock
+
+# === C / C++ ===
+*.o
+*.obj
+*.a
+*.lib
+*.la
+*.lo
+*.slo
+*.d
+*.class
+*.swp
+*.swo
+*~
+
+# === IDE / Editor ===
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# === OS ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# === Terraform ===
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+
+# === Docker ===
+.docker/
+docker-compose.override.yml
+
+# === Generic ===
+*.log
+*.bak
+*.tmp
+*.swp
+*.swo
+*~
+.DS_Store

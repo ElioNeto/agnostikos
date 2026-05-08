@@ -1,0 +1,85 @@
+# =============================================================================
+# .gitconfig — Global Git configuration
+# =============================================================================
+# To use this file, symlink or copy to ~/.gitconfig:
+#   ln -sf "$PWD/.gitconfig" ~/.gitconfig
+#
+# Override user.name and user.email with your own before first commit:
+#   git config --global user.name "Your Name"
+#   git config --global user.email "your@email.com"
+
+[user]
+	name = User Name
+	email = user@email.com
+
+[core]
+	editor = nvim
+	excludesFile = ~/.gitignore_global
+	autocrlf = input
+	whitespace = trailing-space,space-before-tab
+
+[color]
+	ui = auto
+
+[color "branch"]
+	current = yellow bold
+	local = green
+	remote = red
+
+[color "diff"]
+	meta = yellow bold
+	frag = magenta bold
+	old = red bold
+	new = green bold
+
+[color "status"]
+	added = green
+	changed = yellow
+	untracked = red
+
+[alias]
+	a = add
+	aa = add --all
+	amend = commit --amend
+	br = branch
+	brd = branch -d
+	brD = branch -D
+	c = commit
+	ca = commit --amend
+	can = commit --amend --no-edit
+	co = checkout
+	cob = checkout -b
+	d = diff
+	dc = diff --cached
+	f = fetch
+	l = log --oneline --graph --decorate --all
+	lg = log --oneline --graph --decorate --all --stat
+	m = merge
+	pl = pull --rebase
+	ps = push
+	pst = push --tags
+	r = reset
+	rb = rebase
+	rbc = rebase --continue
+	rba = rebase --abort
+	rbi = rebase --interactive
+	s = status
+	st = stash
+	stl = stash list
+	stp = stash pop
+	sts = stash push
+	t = tag
+	td = tag -d
+
+[merge]
+	conflictstyle = diff3
+
+[push]
+	default = simple
+	autoSetupRemote = true
+
+[init]
+	defaultBranch = main
+
+[diff]
+	tool = nvimdiff

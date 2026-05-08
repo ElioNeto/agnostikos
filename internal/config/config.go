@@ -41,6 +41,17 @@ type Config struct {
 		Name  string `yaml:"name"`
 		Shell string `yaml:"shell"`
 	} `yaml:"user"`
+	Dotfiles *DotfilesConfig `yaml:"dotfiles,omitempty"`
+}
+
+// DotfilesConfig configura o gerenciamento de dotfiles.
+type DotfilesConfig struct {
+	// Source é o caminho local ou URL git para obter os dotfiles.
+	// Se vazio, usa os dotfiles embutidos (configs/).
+	Source string `yaml:"source,omitempty"`
+	// Apply indica se os dotfiles devem ser aplicados automaticamente
+	// durante o bootstrap.
+	Apply bool `yaml:"apply"`
 }
 
 // Load reads a YAML file at the given path, unmarshals it into a Config,
@@ -109,6 +120,16 @@ func (c *Config) Validate() error {
 	// User (optional, validate if set)
 	if c.User.Shell != "" && !strings.HasPrefix(c.User.Shell, "/") {
 		errs = append(errs, fmt.Sprintf("user.shell %q must be an absolute path (starting with /)", c.User.Shell))
+	}
+
+	// Dotfiles (optional, validate source if set)
+	if c.Dotfiles != nil && c.Dotfiles.Source != "" {
+		if !strings.HasPrefix(c.Dotfiles.Source, "http://") &&
+			!strings.HasPrefix(c.Dotfiles.Source, "https://") &&
+			!strings.HasPrefix(c.Dotfiles.Source, "git@") &&
+			!strings.HasPrefix(c.Dotfiles.Source, "/") {
+			errs = append(errs, fmt.Sprintf("dotfiles.source %q must be a git URL (http/https/git@) or an absolute local path", c.Dotfiles.Source))
+		}
 	}
 
 	if len(errs) > 0 {

@@ -1,0 +1,139 @@
+# =============================================================================
+# starship.toml — Starship prompt configuration (pastel-powerline preset)
+# =============================================================================
+# To use, symlink or copy to ~/.config/starship.toml:
+#   ln -sf "$PWD/starship.toml" ~/.config/starship.toml
+#
+# Generated from: starship preset pastel-powerline -o starship.toml
+
+# ─── Format ──────────────────────────────────────────────────────────────────
+format = """
+[](#9A348E)\
+$os\
+$username\
+[](bg:#DA627D fg:#9A348E)\
+$directory\
+[](bg:#FCA17D fg:#DA627D)\
+$git_branch\
+$git_status\
+[](bg:#86BBD8 fg:#FCA17D)\
+$c\
+$elixir\
+$elm\
+$golang\
+$haskell\
+$java\
+$julia\
+$nodejs\
+$nim\
+$rust\
+$scala\
+$lua\
+$python\
+[](fg:#86BBD8)\
+$fill\
+[](fg:#06969A)\
+$cmd_duration\
+[](fg:#33658A)\
+$time\
+$line_break\
+$jobs\
+$character"""
+
+# ─── Prompt ──────────────────────────────────────────────────────────────────
+[prompt]
+disabled = false
+
+# ─── OS ──────────────────────────────────────────────────────────────────────
+[os]
+disabled = false
+style = "bg:#9A348E fg:#FFFFFF"
+
+[os.symbols]
+windows = " "
+macos = " "
+linux = " "
+
+# ─── Username ────────────────────────────────────────────────────────────────
+[username]
+show_always = true
+style = "bg:#9A348E fg:#FFFFFF"
+
+# ─── Directory ───────────────────────────────────────────────────────────────
+[directory]
+style = "bg:#DA627D fg:#FFFFFF"
+truncation_length = 3
+truncation_symbol = "…/"
+home_symbol = "~"
+
+# ─── Git Branch ──────────────────────────────────────────────────────────────
+[git_branch]
+style = "bg:#FCA17D fg:#000000"
+format = " [$symbol$branch]($style)"
+symbol = " "
+
+# ─── Git Status ──────────────────────────────────────────────────────────────
+[git_status]
+style = "bg:#FCA17D fg:#000000"
+conflicted = "🏳"
+ahead = "⇡${count}"
+behind = "⇣${count}"
+diverged = "⇕⇡${ahead_count}⇣${behind_count}"
+staged = "+${count}"
+stashed = "📦$count"
+modified = "!${count}"
+untracked = "?${count}"
+renamed = "»${count}"
+deleted = "✘${count}"
+
+# ─── Golang ──────────────────────────────────────────────────────────────────
+[golang]
+style = "bg:#86BBD8 fg:#000000"
+symbol = " "
+
+# ─── Node.js ─────────────────────────────────────────────────────────────────
+[nodejs]
+style = "bg:#86BBD8 fg:#000000"
+symbol = " "
+
+# ─── Rust ────────────────────────────────────────────────────────────────────
+[rust]
+style = "bg:#86BBD8 fg:#000000"
+symbol = " "
+
+# ─── Python ──────────────────────────────────────────────────────────────────
+[python]
+style = "bg:#86BBD8 fg:#000000"
+symbol = " "
+
+# ─── Lua ─────────────────────────────────────────────────────────────────────
+[lua]
+style = "bg:#86BBD8 fg:#000000"
+symbol = " "
+
+# ─── Command Duration ────────────────────────────────────────────────────────
+[cmd_duration]
+style = "fg:#06969A"
+format = " ⏱️ $duration"
+min_time = 2000
+
+# ─── Time ────────────────────────────────────────────────────────────────────
+[time]
+disabled = false
+style = "bg:#33658A fg:#FFFFFF"
+format = " 🕐 $time"
+time_format = "%T"
+
+# ─── Character ───────────────────────────────────────────────────────────────
+[character]
+disabled = false
+style = "fg:#9A348E"
+format = "$symbol"
+success_symbol = "❯"
+error_symbol = "✗"
+
+# ─── Jobs ────────────────────────────────────────────────────────────────────
+[jobs]
+style = "bg:#33658A fg:#FFFFFF"
+threshold = 1
+symbol = "✦"

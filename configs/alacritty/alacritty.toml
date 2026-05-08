@@ -1,0 +1,118 @@
+# =============================================================================
+# alacritty.toml — Alacritty terminal emulator configuration
+# =============================================================================
+# To use, symlink or copy to ~/.config/alacritty/alacritty.toml:
+#   ln -sf "$PWD/alacritty.toml" ~/.config/alacritty/alacritty.toml
+
+# ─── Font ────────────────────────────────────────────────────────────────────
+[font]
+size = 11.0
+
+[font.normal]
+family = "JetBrainsMono Nerd Font"
+style = "Regular"
+
+[font.bold]
+family = "JetBrainsMono Nerd Font"
+style = "Bold"
+
+[font.italic]
+family = "JetBrainsMono Nerd Font"
+style = "Italic"
+
+# ─── Colors (Tokyo Night) ────────────────────────────────────────────────────
+[colors.primary]
+background = "#1a1b26"
+foreground = "#a9b1d6"
+
+[colors.normal]
+black   = "#32344a"
+red     = "#f7768e"
+green   = "#9ece6a"
+yellow  = "#e0af68"
+blue    = "#7aa2f7"
+magenta = "#ad8ee6"
+cyan    = "#449dab"
+white   = "#9699a8"
+
+[colors.bright]
+black   = "#444b6a"
+red     = "#f7768e"
+green   = "#9ece6a"
+yellow  = "#e0af68"
+blue    = "#7aa2f7"
+magenta = "#ad8ee6"
+cyan    = "#449dab"
+white   = "#c0caf5"
+
+[colors.search]
+matches = { foreground = "#1a1b26", background = "#e0af68" }
+focused_match = { foreground = "#1a1b26", background = "#9ece6a" }
+
+[colors.footer_bar]
+background = "#1a1b26"
+foreground = "#a9b1d6"
+
+[colors.hints]
+start = { foreground = "#1a1b26", background = "#e0af68" }
+end = { foreground = "#1a1b26", background = "#c0caf5" }
+
+[colors.line_indicator]
+foreground = "#1a1b26"
+background = "#1a1b26"
+
+[colors.selection]
+background = "#2f3346"
+text = "#a9b1d6"
+
+[colors.vi_mode_cursor]
+text = "#1a1b26"
+background = "#bb9af7"
+
+# ─── Window ──────────────────────────────────────────────────────────────────
+[window]
+opacity = 0.95
+padding = { x = 4, y = 4 }
+dynamic_padding = true
+decorations = "full"
+startup_mode = "Windowed"
+
+[window.dimensions]
+columns = 100
+lines = 30
+
+# ─── Scrolling ───────────────────────────────────────────────────────────────
+[scrolling]
+history = 10000
+multiplier = 3
+
+# ─── Cursor ──────────────────────────────────────────────────────────────────
+[cursor]
+style = { shape = "Block", blinking = "Off" }
+unfocused_hollow = true
+thickness = 0.15
+
+# ─── Mouse ───────────────────────────────────────────────────────────────────
+[mouse]
+hide_when_typing = true
+
+[mouse.bindings]
+- { mouse = "Right", action = "ExpandSelection" }
+
+# ─── Selection ───────────────────────────────────────────────────────────────
+[selection]
+semantic_escape_chars = ",│`|:\"' ()[]{}<>"
+save_to_clipboard = true
+
+# ─── Live Config Reload ──────────────────────────────────────────────────────
+[live_config_reload]
+enabled = true
+
+# ─── Shell ───────────────────────────────────────────────────────────────────
+[shell]
+program = "/bin/zsh"
+args = ["-l", "-i"]
+
+# ─── Keyboard ────────────────────────────────────────────────────────────────
+[env]
+TERM = "xterm-256color"
