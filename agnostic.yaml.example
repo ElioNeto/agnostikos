@@ -9,14 +9,7 @@
 # Todos os campos obrigatórios estão marcados com [requerido].
 
 # [requerido] Versão do perfil de configuração.
-version: "1.0"
-
-# [opcional] Perfil de instalação.
-# Opções: minimal, desktop, server, dev
-# Quando definido, pacotes específicos do perfil são incluídos automaticamente.
-# Exemplo: profile: desktop adiciona hyprland, waybar, etc.
-# Exemplo: profile: dev adiciona ferramentas de desenvolvimento (mise, neovim, lazygit, etc.)
-# profile: dev
+version: "1"
 
 # [requerido] Locale do sistema (formato: <idioma>_<PAÍS>.<codificação>).
 locale: pt_BR.UTF-8
@@ -24,23 +17,48 @@ locale: pt_BR.UTF-8
 # [opcional] Fuso horário do sistema.
 timezone: America/Sao_Paulo
 
+# [opcional] Perfil de instalação.
+# Opções: minimal, desktop, server, dev
+# Quando definido, pacotes específicos do perfil são incluídos automaticamente.
+profile: dev
+
 # [opcional] Lista de pacotes a serem instalados.
 packages:
   # Pacotes base — instalados sempre que o perfil é aplicado.
   base:
-    - vim
-    - git
-    - curl
-    - htop
+    - base
+    - linux
+    - linux-firmware
     - zsh
+    - git
+    - openssh
+    - curl
     - starship
 
-  # Pacotes extras — instalados além dos base quando --extra é especificado.
-  extra:
-    - docker
+  # [opcional] Pacotes de desenvolvimento — ferramentas modernas para dev.
+  dev:
     - neovim
-    - ripgrep
+    - lazygit
     - fzf
+    - ripgrep
+    - bat
+    - eza
+    - zoxide
+    - docker
+    - mise
+
+  # [opcional] Pacotes para ambiente desktop (GUI).
+  desktop:
+    - hyprland
+    - waybar
+    - alacritty
+    - rofi-wayland
+    - dunst
+
+  # [opcional] Pacotes extras — instalados além dos demais quando --extra é especificado.
+  # extra:
+  #   - pacote1
+  #   - pacote2
 
 # [requerido] Configuração dos backends de pacotes.
 backends:
@@ -49,14 +67,18 @@ backends:
   default: pacman
 
   # [opcional] Backend alternativo caso o padrão falhe.
-  fallback: nix
+  fallback: flatpak
 
 # [opcional] Configuração do usuário padrão.
 user:
   # Nome do usuário a ser criado/configurado.
   name: dev
+
   # Shell padrão do usuário.
   shell: /bin/zsh
+
+  # [opcional] Grupos suplementares do usuário.
+  groups: [wheel, docker]
 
 # [opcional] Gerenciamento de dotfiles.
 # Dois modos de uso:
@@ -64,9 +86,8 @@ user:
 #   2. Remoto (source definido): clona um repositório git de dotfiles.
 dotfiles:
   # [opcional] URL git (https://, git@) ou caminho absoluto local.
-  # Exemplo: source: https://github.com/seuuser/dotfiles.git
   # Se vazio, usa os dotfiles do pacote agnostikos (configs/).
-  # source:
+  source: https://github.com/ElioNeto/agnostikos
 
   # [opcional] Aplicar dotfiles automaticamente durante o bootstrap.
   # Quando true, executa `agnostic dotfiles apply` ao final do bootstrap.

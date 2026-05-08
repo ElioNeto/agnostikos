@@ -1,0 +1,37 @@
+# agnostic.yaml.minimal — Perfil headless/server mínimo
+#
+# Variante para servidores headless sem ambiente gráfico.
+# Apenas pacotes base e utilitários essenciais de administração.
+#
+# Uso:
+#   agnostic install --config agnostic.yaml.minimal
+
+version: "1"
+locale: en_US.UTF-8
+timezone: UTC
+profile: minimal
+
+packages:
+  base:
+    - base
+    - linux
+    - linux-firmware
+    - vim
+    - git
+    - curl
+    - htop
+    - openssh
+    - ufw
+    - fail2ban
+    - zsh
+
+backends:
+  default: pacman
+  fallback: flatpak
+
+user:
+  name: admin
+  shell: /bin/bash
+
+dotfiles:
+  apply: false

@@ -104,8 +104,10 @@ func TestValidate_ValidConfig(t *testing.T) {
 		Locale:   "en_US.UTF-8",
 		Timezone: "UTC",
 		Packages: struct {
-			Base  []string `yaml:"base"`
-			Extra []string `yaml:"extra"`
+			Base    []string `yaml:"base"`
+			Extra   []string `yaml:"extra"`
+			Dev     []string `yaml:"dev"`
+			Desktop []string `yaml:"desktop"`
 		}{
 			Base:  []string{"vim"},
 			Extra: []string{"docker"},
@@ -115,8 +117,9 @@ func TestValidate_ValidConfig(t *testing.T) {
 			Fallback string `yaml:"fallback"`
 		}{Default: "pacman", Fallback: "nix"},
 		User: struct {
-			Name  string `yaml:"name"`
-			Shell string `yaml:"shell"`
+			Name   string   `yaml:"name"`
+			Shell  string   `yaml:"shell"`
+			Groups []string `yaml:"groups"`
 		}{Name: "dev", Shell: "/bin/bash"},
 	}
 	if err := cfg.Validate(); err != nil {

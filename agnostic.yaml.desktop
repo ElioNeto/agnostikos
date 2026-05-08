@@ -1,0 +1,125 @@
+# agnostic.yaml.desktop — Perfil desktop + desenvolvimento
+#
+# Variante completa com ambiente gráfico Hyprland (Wayland)
+# e todas as ferramentas de desenvolvimento.
+#
+# Uso:
+#   agnostic install --config agnostic.yaml.desktop
+
+version: "1"
+locale: pt_BR.UTF-8
+timezone: America/Sao_Paulo
+profile: desktop
+
+packages:
+  # ---- Base system ----
+  base:
+    - base
+    - linux
+    - linux-firmware
+    - zsh
+    - git
+    - openssh
+    - curl
+    - starship
+
+  # ---- Dev tools (from configs/profiles/dev.yaml) ----
+  dev:
+    - neovim
+    - lazygit
+    - fzf
+    - ripgrep
+    - bat
+    - eza
+    - zoxide
+    - docker
+    - mise
+    - tmux
+    - gh
+    - delta
+    - rustup
+    - go
+    - docker-compose
+    - podman
+    - distrobox
+    - helix
+    - fd
+    - dust
+    - procs
+    - httpie
+    - yazi
+    - wget
+    - nmap
+    - netcat
+    - mkcert
+    - wireshark
+    - btop
+    - strace
+    - lsof
+    - perf
+    - gnupg
+    - pass
+    - age
+
+  # ---- Desktop packages (from configs/profiles/desktop.yaml) ----
+  desktop:
+    # Compositor Wayland
+    - hyprland
+
+    # Barra de status
+    - waybar
+
+    # Lançador de aplicativos
+    - rofi-wayland
+
+    # Terminal
+    - alacritty
+
+    # Gerenciador de arquivos
+    - yazi
+
+    # Notificações
+    - dunst
+
+    # Screenshots
+    - grimblast
+
+    # Wallpaper
+    - hyprpaper
+
+    # Fontes
+    - noto-fonts
+    - ttf-jetbrains-mono
+
+    # Ícones
+    - papirus-icon-theme
+
+    # Polkit (autenticação gráfica)
+    - polkit-kde-agent
+
+    # Portal XDG (compartilhamento de tela/pastas)
+    - xdg-desktop-portal-hyprland
+
+    # Áudio
+    - pipewire
+    - wireplumber
+
+    # Rede
+    - networkmanager
+
+    # Bluetooth
+    - bluez
+    - bluez-utils
+
+backends:
+  default: pacman
+  fallback: flatpak
+
+user:
+  name: dev
+  shell: /bin/zsh
+  groups: [wheel, docker, video, audio]
+
+dotfiles:
+  source: https://github.com/ElioNeto/agnostikos
+  apply: true

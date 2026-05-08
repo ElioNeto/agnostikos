@@ -1,0 +1,38 @@
+# server.yaml — Perfil de servidor
+#
+# Pacotes para execução de serviços e infraestrutura.
+#
+# Use: agnostic install --profile server
+
+packages:
+  # ---- Sistema Base ----
+  - base
+  - linux
+  - linux-firmware
+  - openssh
+  - zsh
+  - git
+  - curl
+  - vim
+  - htop
+  - man-db
+
+  # ---- Monitoramento ----
+  - btop
+  - htop
+  - lsof
+  - strace
+
+  # ---- Rede ----
+  - curl
+  - wget
+  - nmap
+  - netcat
+  - iptables-nft
+  - bind
+
+  # ---- Segurança ----
+  - gnupg
+  - openssh
+  - fail2ban
+  - ufw

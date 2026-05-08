@@ -61,9 +61,20 @@ Otherwise, install a single package specified as argument.`,
 			for _, pkg := range pp.Packages {
 				fmt.Printf("   • %s\n", pkg)
 			}
-			fmt.Println()
-			fmt.Printf("ℹ️  Run with --backend <name> to install (default: %s)\n", backend)
-			fmt.Println("   Example: agnostic install --profile dev --backend pacman")
+
+			mgr := manager.NewAgnosticManager()
+			svc, ok := mgr.Backends[backend]
+			if !ok {
+				return fmt.Errorf("backend '%s' not found — available: pacman, nix, flatpak", backend)
+			}
+
+			for _, pkg := range pp.Packages {
+				fmt.Printf("📦 Installing '%s' via %s...\n", pkg, backend)
+				if err := svc.Install(pkg); err != nil {
+					return fmt.Errorf("installation of '%s' failed: %w", pkg, err)
+				}
+				fmt.Printf("✅ '%s' installed successfully\n", pkg)
+			}
 			return nil
 		}
 
@@ -79,6 +90,37 @@ Otherwise, install a single package specified as argument.`,
 
 			mgr := manager.NewAgnosticManager()
 			pkgs := append(cfg.Packages.Base, cfg.Packages.Extra...)
+			pkgs = append(pkgs, cfg.Packages.Dev...)
+			pkgs = append(pkgs, cfg.Packages.Desktop...)
+
+			// If profile is set in config, load profile packages too
+			if cfg.Profile != "" {
+				if !config.SupportedProfiles[cfg.Profile] {
+					return fmt.Errorf("profile %q is not supported — must be one of: minimal, desktop, server, dev", cfg.Profile)
+				}
+				profilePath := filepath.Join("configs", "profiles", cfg.Profile+".yaml")
+				data, err := os.ReadFile(profilePath)
+				if err != nil {
+					return fmt.Errorf("reading profile %q: %w", cfg.Profile, err)
+				}
+				var pp profilePackages
+				if err := yaml.Unmarshal(data, &pp); err != nil {
+					return fmt.Errorf("parsing profile %q: %w", cfg.Profile, err)
+				}
+				pkgs = append(pkgs, pp.Packages...)
+			}
+
+			// Deduplicate packages to prevent double-installation
+			seen := make(map[string]struct{}, len(pkgs))
+			unique := make([]string, 0, len(pkgs))
+			for _, pkg := range pkgs {
+				if _, ok := seen[pkg]; !ok {
+					seen[pkg] = struct{}{}
+					unique = append(unique, pkg)
+				}
+			}
+			pkgs = unique
+
 			if len(pkgs) == 0 {
 				fmt.Println("No packages defined in config")
 				return nil

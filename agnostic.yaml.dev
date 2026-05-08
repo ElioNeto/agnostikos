@@ -1,0 +1,98 @@
+# agnostic.yaml.dev — Perfil completo de desenvolvimento
+#
+# Variante com todos os pacotes de desenvolvimento do perfil dev,
+# runtimes, containers, editores, utilitários modernos CLI.
+#
+# Uso:
+#   agnostic install --config agnostic.yaml.dev
+
+version: "1"
+locale: en_US.UTF-8
+timezone: UTC
+profile: dev
+
+packages:
+  # ---- Base system ----
+  base:
+    - base
+    - linux
+    - linux-firmware
+    - zsh
+    - git
+    - openssh
+    - curl
+    - starship
+
+  # ---- Dev tools (all packages from configs/profiles/dev.yaml) ----
+  dev:
+    # Shell / Terminal
+    - zsh
+    - starship
+    - fzf
+    - tmux
+    - alacritty
+
+    # Version Control
+    - git
+    - lazygit
+    - gh
+    - delta
+
+    # Runtimes / Language Toolchains
+    - mise
+    - rustup
+    - go
+
+    # Containers / Virtualização
+    - docker
+    - docker-compose
+    - podman
+    - distrobox
+
+    # Editores / IDEs
+    - neovim
+    - helix
+
+    # Modern Utils (GNU replacements)
+    - eza
+    - bat
+    - ripgrep
+    - fd
+    - zoxide
+    - dust
+    - procs
+    - httpie
+    - yazi
+
+    # Network / Debug
+    - curl
+    - wget
+    - nmap
+    - netcat
+    - mkcert
+    - wireshark
+
+    # Observabilidade / System
+    - btop
+    - strace
+    - lsof
+    - perf
+
+    # Segurança / Criptografia
+    - gnupg
+    - pass
+    - age
+    - openssh
+
+backends:
+  default: pacman
+  fallback: flatpak
+
+user:
+  name: dev
+  shell: /bin/zsh
+  groups: [wheel, docker, libvirt]
+
+dotfiles:
+  source: https://github.com/ElioNeto/agnostikos
+  apply: true

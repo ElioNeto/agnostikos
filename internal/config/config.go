@@ -39,16 +39,19 @@ type Config struct {
 	Locale   string `yaml:"locale"`
 	Timezone string `yaml:"timezone"`
 	Packages struct {
-		Base  []string `yaml:"base"`
-		Extra []string `yaml:"extra"`
+		Base    []string `yaml:"base"`
+		Extra   []string `yaml:"extra"`
+		Dev     []string `yaml:"dev"`
+		Desktop []string `yaml:"desktop"`
 	} `yaml:"packages"`
 	Backends struct {
 		Default  string `yaml:"default"`
 		Fallback string `yaml:"fallback"`
 	} `yaml:"backends"`
 	User struct {
-		Name  string `yaml:"name"`
-		Shell string `yaml:"shell"`
+		Name   string   `yaml:"name"`
+		Shell  string   `yaml:"shell"`
+		Groups []string `yaml:"groups"`
 	} `yaml:"user"`
 	Dotfiles *DotfilesConfig `yaml:"dotfiles,omitempty"`
 }
@@ -130,10 +133,25 @@ func (c *Config) Validate() error {
 			errs = append(errs, fmt.Sprintf("packages.extra[%d] is empty", i))
 		}
 	}
+	for i, pkg := range c.Packages.Dev {
+		if strings.TrimSpace(pkg) == "" {
+			errs = append(errs, fmt.Sprintf("packages.dev[%d] is empty", i))
+		}
+	}
+	for i, pkg := range c.Packages.Desktop {
+		if strings.TrimSpace(pkg) == "" {
+			errs = append(errs, fmt.Sprintf("packages.desktop[%d] is empty", i))
+		}
+	}
 
 	// User (optional, validate if set)
 	if c.User.Shell != "" && !strings.HasPrefix(c.User.Shell, "/") {
 		errs = append(errs, fmt.Sprintf("user.shell %q must be an absolute path (starting with /)", c.User.Shell))
+	}
+	for i, g := range c.User.Groups {
+		if strings.TrimSpace(g) == "" {
+			errs = append(errs, fmt.Sprintf("user.groups[%d] is empty", i))
+		}
 	}
 
 	// Dotfiles (optional, validate source if set)

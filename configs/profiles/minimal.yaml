@@ -1,0 +1,19 @@
+# minimal.yaml — Perfil mínimo para servidor headless
+#
+# Instala apenas o essencial para um sistema funcional sem interface gráfica.
+#
+# Use: agnostic install --profile minimal
+
+packages:
+  # ---- Base System ----
+  - base
+  - linux
+  - linux-firmware
+  - openssh
+  - zsh
+  - git
+  - curl
+  - vim
+  - htop
+  - man-db
+  - man-pages

@@ -197,6 +197,7 @@ func mountVirtualFS(target string) error {
 			fmt.Printf("[rootfs] mounted %s -> %s\n", m.fstype, m.target)
 		}
 	}
+
 	return nil
 }
 
@@ -349,15 +350,15 @@ ExecStart=-/sbin/agetty --autologin %s --noclear %%I $TERM
 
 // setupMiseRuntimes instala runtimes via mise no rootfs.
 // Verifica se o binário mise existe e executa mise install para cada runtime listado.
-func setupMiseRuntimes(rootfsDir string, runtimes []string) error {
+func setupMiseRuntimes(rootfsDir string, runtimes []string) {
 	if len(runtimes) == 0 {
-		return nil
+		return
 	}
 
 	miseBin := filepath.Join(rootfsDir, "/usr/bin/mise")
 	if _, err := os.Stat(miseBin); os.IsNotExist(err) {
 		fmt.Printf("[mise] /usr/bin/mise not found in rootfs, skipping runtime install\n")
-		return nil
+		return
 	}
 
 	fmt.Printf("[mise] Installing %d runtimes: %s\n", len(runtimes), strings.Join(runtimes, ", "))
@@ -370,11 +371,13 @@ fi
 `
 	profileDir := filepath.Join(rootfsDir, "etc", "profile.d")
 	if err := os.MkdirAll(profileDir, 0755); err != nil {
-		return fmt.Errorf("mkdir /etc/profile.d: %w", err)
+		fmt.Printf("[mise] warn: mkdir /etc/profile.d: %v\n", err)
+		return
 	}
 	profilePath := filepath.Join(profileDir, "mise.sh")
 	if err := os.WriteFile(profilePath, []byte(profileScript), 0644); err != nil {
-		return fmt.Errorf("write mise.sh: %w", err)
+		fmt.Printf("[mise] warn: write mise.sh: %v\n", err)
+		return
 	}
 	fmt.Printf("[mise] wrote activation script to %s\n", profilePath)
 
@@ -390,8 +393,6 @@ fi
 			fmt.Printf("[mise] Installed %s\n", rt)
 		}
 	}
-
-	return nil
 }
 
 // BootstrapAll executa o pipeline completo de construção do RootFS
@@ -546,9 +547,7 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	// Step 11: Setup mise runtimes (optional)
 	if len(cfg.MiseRuntimes) > 0 {
 		fmt.Println("\n=== Step 11/13: Setup Mise Runtimes ===")
-		if err := setupMiseRuntimes(cfg.TargetDir, cfg.MiseRuntimes); err != nil {
-			return fmt.Errorf("setup mise runtimes: %w", err)
-		}
+		setupMiseRuntimes(cfg.TargetDir, cfg.MiseRuntimes)
 	} else {
 		fmt.Println("\n=== Step 11/13: Setup Mise Runtimes (skipped) ===")
 	}
