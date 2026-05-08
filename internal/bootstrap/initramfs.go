@@ -139,6 +139,9 @@ poweroff -f
 		for _, a := range applets {
 			linkPath := filepath.Join(targetBin, a)
 			if err := os.Symlink("busybox", linkPath); err != nil {
+				if os.IsExist(err) {
+					continue
+				}
 				return fmt.Errorf("symlink %s: %w", a, err)
 			}
 		}

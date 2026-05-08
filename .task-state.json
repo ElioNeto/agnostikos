@@ -1,40 +1,41 @@
 {
-  "active_issue": 21,
+  "version": "1",
+  "task": {
+    "number": 20,
+    "title": "[RELEASE] Primeira release v0.1.0 via GoReleaser"
+  },
   "todos": [
     {
-      "id": "todo-1",
-      "description": "Add charmbracelet Bubble Tea dependencies to go.mod: run `go get github.com/charmbracelet/bubbletea github.com/charmbracelet/bubbles github.com/charmbracelet/lipgloss` and `go mod tidy`",
+      "id": 1,
+      "description": "Review .goreleaser.yml config: binary name, archives template, checksums, nfpm, brew, changelog",
+      "files": [".goreleaser.yml"],
+      "depends_on": [],
       "status": "completed",
-      "files": ["go.mod", "go.sum"],
-      "note": "Requires network access. The three charmbracelet packages are: bubbletea (TUI framework), bubbles (pre-built components: textinput, list, spinner), lipgloss (styling)."
+      "note": "Config is correct and complete. Binary name: agnostic. GoOS: linux, GoArch: amd64+arm64. Archives: tar.gz. Checksums: checksums.txt. nfpm: deb+rpm. Brew: homebrew-tap. Changelog: github-native. No edits needed."
     },
     {
-      "id": "todo-2",
-      "description": "Create internal/tui/model.go with the main Bubble Tea model: Model struct implementing tea.Model (Init/Update/View), view state enum (backendList, search, packageDetail), backend selection screen listing pacman/nix/flatpak, search screen with bubbles/textinput and results list calling AgnosticManager.Search, package detail screen with install/remove actions calling AgnosticManager.Install/Remove, and bubbles/spinner for async operation feedback",
-      "status": "completed",
-      "files": ["internal/tui/model.go"],
-      "note": "Core TUI implementation. The Model struct holds current view, selected backend, search query/results, selected package detail, spinner model, and a reference to *manager.AgnosticManager. Custom message types carry async results (search results, install/remove outcome)."
-    },
-    {
-      "id": "todo-3",
-      "description": "Create cmd/agnostic/tui.go with the Cobra `tui` subcommand: define tuiCmd, register in init() via rootCmd.AddCommand(tuiCmd). The RunE creates a manager.NewAgnosticManager(), initializes the tui.Model, starts tea.NewProgram(model), and runs it",
-      "status": "completed",
-      "files": ["cmd/agnostic/tui.go"],
-      "note": "Follows existing pattern from cmd/agnostic/install.go. Imports internal/manager and internal/tui packages."
-    },
-    {
-      "id": "todo-4",
-      "description": "Create internal/tui/model_test.go with unit tests: test initial Model state, view transitions (backendList→search→packageDetail→backendList), search results message handling, install/remove action messages, spinner lifecycle during async operations, and edge cases (empty results, backend errors). Use MockBackend from manager package to simulate backends",
-      "status": "completed",
-      "files": ["internal/tui/model_test.go"],
-      "note": "Table-driven tests following project conventions. Test both success and error paths. Mock AgnosticManager with MockBackend to avoid real pacman/nix/flatpak calls."
-    },
-    {
-      "id": "todo-5",
-      "description": "Run final verification: go vet ./..., golangci-lint run ./..., go test ./... -race -coverprofile=coverage.txt. Fix any issues found. Update this task status to done when all pass",
-      "status": "completed",
+      "id": 2,
+      "description": "Create and push git tag v0.1.0 to trigger release workflow",
       "files": [],
-      "note": "Final verification step. Depends on all previous TODOs being complete."
+      "depends_on": [1],
+      "status": "blocked",
+      "note": "Cannot execute git tag/push in this sandbox environment. Run the following commands manually: git tag v0.1.0 && git push origin v0.1.0"
+    },
+    {
+      "id": 3,
+      "description": "Verify GoReleaser workflow triggers and completes successfully in GitHub Actions",
+      "files": [".github/workflows/release.yml"],
+      "depends_on": [2],
+      "status": "pending",
+      "note": "After tag v0.1.0 is pushed, go to https://github.com/ElioNeto/agnostikos/actions and verify the 'Release' workflow triggers and completes successfully. Check that goreleaser runs without errors and publishes the release."
+    },
+    {
+      "id": 4,
+      "description": "Validate release artifacts: binaries for linux/amd64 and linux/arm64, and checksums.txt on GitHub Releases page",
+      "files": [],
+      "depends_on": [3],
+      "status": "pending",
+      "note": "After workflow completes, go to https://github.com/ElioNeto/agnostikos/releases/tag/v0.1.0 and verify: agnostikos_0.1.0_linux_amd64.tar.gz, agnostikos_0.1.0_linux_arm64.tar.gz, checksums.txt. Also verify nfpm packages (.deb/.rpm) are attached if applicable."
     }
   ]
 }

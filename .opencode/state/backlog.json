@@ -1,64 +1,19 @@
 {
-  "meta": {
-    "repository": "ElioNeto/agnostikos",
-    "synced_at": "2026-05-08T00:00:00Z"
-  },
+  "sync_timestamp": "2026-05-08T12:16:00-03:00",
+  "source": "github",
+  "repository": "ElioNeto/agnostikos",
   "issues": [
-    {
-      "number": 18,
-      "priority": "low",
-      "title": "[BOOTSTRAP] RootFS real: kernel, GRUB e init mínimo bootável",
-      "status": "done",
-      "depends_on": [17],
-      "blocks": [],
-      "acceptance_summary": [
-        "make bootstrap && make iso && make test-iso resulta em VM que dá boot até o prompt",
-        "Boot BIOS e UEFI funcionando",
-        "make test-iso-headless passável no CI"
-      ],
-      "fetched_body": false
-    },
-    {
-      "number": 19,
-      "priority": "low",
-      "title": "[CI] Integrar test-iso-headless no GitHub Actions com ISO mínima",
-      "status": "done",
-      "depends_on": [16, 18],
-      "blocks": [],
-      "acceptance_summary": [
-        "make test-iso-headless passa no GitHub Actions sem KVM",
-        "Fallback TCG automático quando KVM não disponível",
-        "CI completo: lint → test → build → iso → test-iso-headless"
-      ],
-      "fetched_body": false
-    },
     {
       "number": 20,
       "priority": "low",
       "title": "[RELEASE] Primeira release v0.1.0 via GoReleaser",
-      "status": "done",
-      "depends_on": [],
-      "blocks": [],
-      "acceptance_summary": [
-        "Release v0.1.0 publicada com binários para linux/amd64 e linux/arm64",
-        "Checksums SHA256 presentes",
-        "README atualizado com link para download"
-      ],
-      "fetched_body": false
-    },
-    {
-      "number": 21,
-      "priority": "low",
-      "title": "[TUI] Interface interativa no terminal com Bubble Tea",
       "status": "open",
       "depends_on": [],
       "blocks": [],
       "acceptance_summary": [
-        "agnostic tui abre a interface interativa",
-        "Busca, instalação e remoção funcionam via TUI",
-        "Spinner durante operações assíncronas",
-        "Funciona em terminal 80x24 mínimo",
-        "Lint e testes passam"
+        "Release v0.1.0 publicada com binários linux/amd64 e linux/arm64",
+        "Checksums SHA256 presentes",
+        "README atualizado com link para download"
       ],
       "fetched_body": false
     },
@@ -87,7 +42,7 @@
       "blocks": [],
       "acceptance_summary": [
         "Primeiro login já abre Zsh com autosuggestions e syntax highlighting",
-        "starship exibe branch git, linguagem e versão no prompt",
+        "Starship exibe branch git, linguagem e versão no prompt",
         "fzf funciona com Ctrl+R e Ctrl+T",
         "Configuração gerenciada pelo sistema de dotfiles"
       ],
