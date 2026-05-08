@@ -17,6 +17,7 @@ type ISOConfig struct {
 	InitramfsPath string // caminho opcional para initramfs; vazio = RootFS/boot/initramfs.img
 	UEFI          bool
 	BootLabel     string
+	TestMode      bool // quando true, gera initramfs mínimo sem busybox para teste
 }
 
 func findVmlinuz(rootfs, kernelVersion string) (string, error) {
@@ -83,7 +84,7 @@ func GenerateISO(cfg ISOConfig) error {
 		}
 	} else {
 		fmt.Printf("[iso] real initramfs not found at %s, creating stub\n", initramfsSrc)
-		if err := createinitramfs(filepath.Join(bootDir, "initramfs.img")); err != nil {
+		if err := createinitramfs(filepath.Join(bootDir, "initramfs.img"), cfg.TestMode); err != nil {
 			return fmt.Errorf("create initramfs stub: %w", err)
 		}
 	}
@@ -109,7 +110,7 @@ menuentry "%s %s" {
 	return runGrubMkrescue(isoDir, cfg)
 }
 
-func createinitramfs(output string) error {
+func createinitramfs(output string, testMode bool) error {
 	initTmpBase := tmpDir()
 	if err := os.MkdirAll(initTmpBase, 0755); err != nil {
 		return fmt.Errorf("mkdir initramfs tmp base: %w", err)
@@ -119,20 +120,47 @@ func createinitramfs(output string) error {
 		return fmt.Errorf("create initramfs temp dir: %w", err)
 	}
 	defer os.RemoveAll(initDir)
-	for _, d := range []string{"bin", "dev", "etc", "proc", "sys", "mnt/root"} {
-		if err := os.MkdirAll(filepath.Join(initDir, d), 0755); err != nil {
-			return fmt.Errorf("mkdir %s: %w", d, err)
+
+	if testMode {
+		// Initramfs mínimo de teste: auto-contido, sem busybox.
+		// Monta VFS, imprime "Welcome to Agnostikos" e desliga.
+		for _, d := range []string{"dev", "proc", "sys"} {
+			if err := os.MkdirAll(filepath.Join(initDir, d), 0755); err != nil {
+				return fmt.Errorf("mkdir %s: %w", d, err)
+			}
 		}
-	}
-	init := `#!/bin/sh
+		init := `#!/bin/sh
+mount -t proc none /proc
+mount -t sysfs none /sys
+mount -t devtmpfs none /dev
+echo ""
+echo "================================================"
+echo "  Welcome to Agnostikos"
+echo "  Kernel: $(uname -r)"
+echo "================================================"
+echo ""
+poweroff -f
+`
+		if err := os.WriteFile(filepath.Join(initDir, "init"), []byte(init), 0755); err != nil {
+			return fmt.Errorf("write test init: %w", err)
+		}
+	} else {
+		for _, d := range []string{"bin", "dev", "etc", "proc", "sys", "mnt/root"} {
+			if err := os.MkdirAll(filepath.Join(initDir, d), 0755); err != nil {
+				return fmt.Errorf("mkdir %s: %w", d, err)
+			}
+		}
+		init := `#!/bin/sh
 mount -t proc none /proc
 mount -t sysfs none /sys
 mount -t devtmpfs none /dev
 exec switch_root /mnt/root /sbin/init
 `
-	if err := os.WriteFile(filepath.Join(initDir, "init"), []byte(init), 0755); err != nil {
-		return fmt.Errorf("write init: %w", err)
+		if err := os.WriteFile(filepath.Join(initDir, "init"), []byte(init), 0755); err != nil {
+			return fmt.Errorf("write init: %w", err)
+		}
 	}
+
 	cmd := exec.Command("sh", "-c",
 		fmt.Sprintf("cd %s && find . | cpio -o -H newc | gzip > %s", initDir, output))
 	if err := cmd.Run(); err != nil {

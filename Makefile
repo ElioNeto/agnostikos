@@ -1,4 +1,4 @@
-.PHONY: help build test clean install test-iso test-iso-headless lint fmt deps iso bootstrap
+.PHONY: help build test clean install test-iso test-iso-headless lint fmt deps iso bootstrap minimal-rootfs minimal-iso test-minimal-iso-headless
 
 BINARY_NAME=agnostic
 
@@ -55,6 +55,23 @@ test-iso: ## Test ISO in QEMU
 TEST_ISO_TIMEOUT ?= 300
 
 test-iso-headless: ## Test ISO in QEMU (headless, for CI)
+	HEADLESS=1 BOOT_TIMEOUT=$(TEST_ISO_TIMEOUT) bash scripts/run-qemu.sh $(BUILD_DIR)/agnostikos-latest.iso
+
+# Minimal RootFS for CI testing (no toolchain, uses host kernel)
+# Diretório do rootfs mínimo (para testes sem toolchain completa)
+MINIMAL_ROOTFS_DIR=$(AGNOSTICOS_BASE)/minimal-rootfs
+
+minimal-rootfs: ## Prepare minimal rootfs with host kernel (no toolchain)
+	@bash scripts/prepare-minimal-rootfs.sh
+
+minimal-iso: build minimal-rootfs ## Build test ISO from minimal rootfs (host kernel + test initramfs)
+	@$(BUILD_DIR)/$(BINARY_NAME) iso \
+		--rootfs $(MINIMAL_ROOTFS_DIR) \
+		--output $(BUILD_DIR)/agnostikos-latest.iso \
+		--test \
+		$(ARGS)
+
+test-minimal-iso-headless: minimal-iso ## Build minimal ISO and test it headless in QEMU (for CI)
 	HEADLESS=1 BOOT_TIMEOUT=$(TEST_ISO_TIMEOUT) bash scripts/run-qemu.sh $(BUILD_DIR)/agnostikos-latest.iso
 
 test-boot-integration: build ## Run full boot integration test (bootstrap → ISO → QEMU)

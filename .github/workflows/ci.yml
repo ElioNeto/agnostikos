@@ -62,6 +62,30 @@ jobs:
           version: latest
           args: --timeout=5m ./...
 
+  # test-iso-headless: teste rápido de boot ISO com rootfs mínimo (kernel do host + initramfs
+  # de teste sem busybox). Roda em push/PR para validar que a ISO ainda boota.
+  # Usa TCG (sem KVM) — lento mas funcional. Timeout 300s para emulação TCG.
+  test-iso-headless:
+    if: github.event_name != 'workflow_dispatch'
+    needs: [build-and-test, lint]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Install dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-x86 xorriso grub-pc-bin grub-efi-amd64-bin mtools ovmf
+      - name: Build Go binary
+        run: make build
+      - name: Prepare minimal rootfs
+        run: bash scripts/prepare-minimal-rootfs.sh
+      - name: Build minimal ISO
+        run: make minimal-iso
+      - name: Test ISO (headless, TCG)
+        run: HEADLESS=1 BOOT_TIMEOUT=300 make test-minimal-iso-headless
+
   # test-iso: compila kernel 6.6 + busybox + initramfs + ISO, depois roda QEMU.
   # Usa TCG (sem KVM) em GitHub Actions — mais lento porém funcional.
   # Kernel + busybox compilados do fonte (~25 min total em ubuntu-latest).
