@@ -32,3 +32,11 @@ Thumbs.db
 
 # Node / Scripts
 scripts/node_modules/
+
+# Agent/AI tools
+.opencode/
+.task-state.json
+opencode.json
+AGENTS.md
+rules/
+*.rb
