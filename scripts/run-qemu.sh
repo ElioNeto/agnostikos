@@ -28,9 +28,9 @@ echo -e "${GREEN}[QEMU]${NO_COLOR} ISO: $ISO | RAM: $RAM | CPUs: $CPUS | Headles
 
 [[ ! -f "$ISO" ]] && { echo -e "${RED}[ERROR]${NO_COLOR} ISO not found: $ISO"; exit 1; }
 
-# KVM detection
+# KVM detection: check readable (not just exists) to avoid permission denied
 KVM_FLAG=""
-if [[ -e /dev/kvm ]]; then
+if [[ -r /dev/kvm ]]; then
     KVM_FLAG="-enable-kvm"
     echo -e "${GREEN}[QEMU]${NO_COLOR} KVM acceleration enabled"
 else

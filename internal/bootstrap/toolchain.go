@@ -146,11 +146,16 @@ func BuildGCC(ctx context.Context, cfg ToolchainConfig) error {
 		return fmt.Errorf("extract gcc: %w", err)
 	}
 
-	// Baixar dependências do GCC (GMP, MPFR, MPC, ISL)
-	fmt.Println("[toolchain] Downloading GCC prerequisites...")
-	dlCmd := exec.CommandContext(ctx, "make", "-C", srcPath, "graphite=", "fetch")
+	// Baixar dependências do GCC (GMP, MPFR, MPC, ISL) via script oficial
+	fmt.Println("[toolchain] Downloading GCC prerequisites via contrib/download_prerequisites...")
+	dlCmd := exec.CommandContext(ctx, "bash",
+		filepath.Join(srcPath, "contrib", "download_prerequisites"),
+	)
+	dlCmd.Dir = srcPath
 	dlCmd.Stdout, dlCmd.Stderr = os.Stdout, os.Stderr
-	_ = dlCmd.Run() // best-effort
+	if err := dlCmd.Run(); err != nil {
+		return fmt.Errorf("gcc prerequisites download: %w", err)
+	}
 
 	buildDir := filepath.Join(srcDir, "build-gcc")
 	if err := os.MkdirAll(buildDir, 0755); err != nil {
