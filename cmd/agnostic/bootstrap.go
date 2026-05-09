@@ -33,8 +33,9 @@ var (
 )
 
 var bootstrapCmd = &cobra.Command{
-	Use:   "bootstrap",
-	Short: "Create the AgnosticOS root filesystem, kernel, busybox, initramfs and GRUB",
+	Use:    "bootstrap",
+	Hidden: true,
+	Short:  "Create the AgnosticOS root filesystem, kernel, busybox, initramfs and GRUB (internal)",
 	Long: `Build a complete bootable RootFS with:
   - FHS directory structure
   - Linux kernel compilation

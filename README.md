@@ -40,8 +40,8 @@ Built from scratch in Go, AgnosticOS is designed for developers who work across 
 - 🔀 **Multi-backend dispatch** — Pacman, Nix, and Flatpak, all from one CLI
 - 📋 **Config-driven installs** — declare your packages in `agnostic.yaml`
 - 🔒 **Namespace isolation** — optional Linux mount namespace sandboxing
-- 🏗️ **Bootstrap pipeline** — RootFS (FHS) → toolchain download → kernel → busybox → initramfs → GRUB (BIOS or UEFI)
-- 💿 **ISO builder** — produce a bootable ISO and test it in QEMU
+- 🏗️ **Build pipeline** — full ISO generation: RootFS → toolchain → kernel → busybox → initramfs → GRUB → ISO (BIOS or UEFI)
+- 💿 **ISO builder** — standalone ISO generation from an existing RootFS (`agnostic iso`)
 
 ---
 
@@ -82,58 +82,49 @@ make build
 
 ---
 
-## 🏗️ Bootstrap pipeline
+## 🏗️ Build pipeline
 
-The `bootstrap` command builds a complete bootable RootFS from scratch.
-
-### UEFI (recommended)
-
-```bash
-sudo ./build/agnostic bootstrap \
-  --target /mnt/lfs \
-  --efi-partition /dev/nvme0n1p1 \
-  --uefi
-```
-
-> `--efi-partition` mounts the EFI System Partition (FAT32) at `<target>/boot/efi` automatically before running `grub-install`, then unmounts it.
-
-### BIOS (MBR disks only)
-
-> ⚠️ **GPT disks require a BIOS Boot Partition** (1 MB, type `EF02`) before using BIOS mode.
-> If your disk is GPT without one, use `--uefi` instead.
+The `build` command runs the complete ISO generation pipeline — from creating the RootFS
+to producing a bootable ISO image.
 
 ```bash
-sudo ./build/agnostic bootstrap \
-  --target /mnt/lfs \
-  --device /dev/sda
-```
+# Default build (auto-detects architecture, uses kernel 6.6, busybox 1.36.1)
+sudo ./build/agnostic build --output /tmp/agnostikos.iso
 
-### Skip individual steps
+# Build from a recipe file
+./build/agnostic build recipes/base.yaml
 
-```bash
-sudo ./build/agnostic bootstrap \
-  --target /mnt/lfs \
-  --efi-partition /dev/nvme0n1p1 \
+# Quick build (skip lengthy toolchain compilation)
+./build/agnostic build --skip-toolchain --output /tmp/agnostikos.iso
+
+# Full build with UEFI
+sudo ./build/agnostic build \
   --uefi \
-  --skip-kernel \
-  --skip-busybox \
-  --skip-initramfs
+  --output /tmp/agnostikos.iso
 ```
 
-### All `bootstrap` flags
+> **Note**: The `bootstrap` subcommand is still available internally for advanced use
+> (`agnostic bootstrap --help`), but `build` is the recommended entry point.
+
+### Key flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `-t, --target` | `$LFS` or `/mnt/lfs` | Target RootFS directory |
-| `--device` | — | Disk for BIOS `grub-install` (e.g. `/dev/sda`) |
-| `--efi-partition` | — | ESP partition to auto-mount for UEFI (e.g. `/dev/nvme0n1p1`) |
+| `-o, --output` | `agnostikos-latest.iso` | Output ISO path |
+| `-t, --target` | `$AGNOSTICOS_ROOT` | RootFS target directory |
+| `--device` | — | Disk for BIOS `grub-install` |
+| `--efi-partition` | — | ESP partition for UEFI `grub-install` |
 | `--uefi` | `false` | Enable UEFI boot support |
 | `--kernel-version` | `6.6` | Linux kernel version |
 | `--busybox-version` | `1.36.1` | Busybox version |
+| `--arch` | auto-detect | Target architecture (`amd64`, `arm64`) |
+| `--recipe` | — | Load settings from a YAML recipe file |
+| `--skip-toolchain` | `false` | Skip toolchain compilation |
 | `--skip-kernel` | `false` | Skip kernel compilation |
 | `--skip-busybox` | `false` | Skip busybox compilation |
 | `--skip-initramfs` | `false` | Skip initramfs generation |
 | `--skip-grub` | `false` | Skip GRUB installation |
+| `--force` | `false` | Rebuild all steps from scratch |
 
 ---
 
@@ -186,11 +177,13 @@ make fmt                # Format Go code
 make install            # Install to /usr/local/bin
 make clean              # Remove build artifacts
 make iso                # Build ISO from RootFS
-make bootstrap          # Bootstrap RootFS into $(LFS) (requires root)
+make bootstrap          # (internal) RootFS bootstrap pipeline (requires root)
 make dev                # Run in development mode
 ```
 
-> **Note:** `make bootstrap` requires **root privileges** because it mounts virtual filesystems (`proc`, `sys`, `dev`) and optionally the EFI System Partition into the target directory.
+> **Note:** `make build` runs the full pipeline and does NOT require root unless you use
+> `--device`/`--efi-partition` for GRUB installation into real hardware. `make bootstrap`
+> is kept for backward compatibility but `make build [ARGS="..."]` is the recommended target.
 
 ---
 

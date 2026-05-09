@@ -103,7 +103,7 @@ iso: build ## Build ISO from RootFS — output vai para $(BUILD_DIR)/agnostikos-
 		--output $(BUILD_DIR)/agnostikos-latest.iso \
 		$(ARGS)
 
-bootstrap: build ## Bootstrap RootFS into $(LFS) — use ARGS="--skip-grub" etc.
+bootstrap: build ## (internal) Bootstrap RootFS into $(LFS) — use 'build' instead
 	@sudo $(BUILD_DIR)/$(BINARY_NAME) bootstrap $(ARGS)
 
 docs: ## Generate man pages and Markdown docs

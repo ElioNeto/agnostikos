@@ -62,6 +62,32 @@ jobs:
           version: v2.12.2
           args: --timeout=5m ./...
 
+  # build-and-test-arm64: valida compilação e testes para ARM64 via emulação QEMU.
+  build-and-test-arm64:
+    name: Build & Test (linux/arm64)
+    needs: [build-and-test, lint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+      - name: Download dependencies
+        run: go mod download && go mod tidy
+      - name: Build (arm64 cross-compile)
+        run: GOARCH=arm64 GOARM=7 go build -o build/agnostic-arm64 .
+      - name: Test (arm64 emulation)
+        run: GOARCH=arm64 go test -v -count=1 -timeout 10m ./...
+      - name: Vet (arm64)
+        run: GOARCH=arm64 go vet ./...
+
   integration-e2e:
     needs: [build-and-test, lint]
     runs-on: ubuntu-latest
@@ -118,3 +144,77 @@ jobs:
         run: make iso
       - name: Test ISO (headless, TCG)
         run: HEADLESS=1 BOOT_TIMEOUT=300 make test-iso-headless
+
+  # test-iso-headless-arm64: teste de boot ISO ARM64 com QEMU + UEFI (AAVMF).
+  # Usa kernel ARM64 pré-compilado e busybox estático ARM64 baixados via script.
+  # Executa apenas manualmente (workflow_dispatch) — análogo ao test-iso.
+  test-iso-headless-arm64:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [build-and-test, lint]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - name: Install dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-aarch64 xorriso mtools ovmf grub-efi-arm64-bin
+      - name: Build Go binary
+        run: make build
+      - name: Prepare minimal ARM64 rootfs
+        run: bash scripts/prepare-minimal-rootfs-arm64.sh
+      - name: Build ARM64 ISO
+        run: |
+          ./build/agnostic iso \
+            --rootfs /mnt/data/agnostikOS/minimal-rootfs-arm64 \
+            --output /mnt/data/agnostikOS/build/agnostikos-arm64.iso \
+            --uefi
+      - name: Test ARM64 ISO (headless, UEFI)
+        run: |
+          # Use AAVMF (ARM64 OVMF) for UEFI boot
+          if [ -f /usr/share/AAVMF/AAVMF_CODE.fd ]; then
+            CODE_FD=/usr/share/AAVMF/AAVMF_CODE.fd
+            VARS_FD=/usr/share/AAVMF/AAVMF_VARS.fd
+          elif [ -f /usr/share/edk2/aarch64/OVMF_CODE.fd ]; then
+            CODE_FD=/usr/share/edk2/aarch64/OVMF_CODE.fd
+            VARS_FD=/usr/share/edk2/aarch64/OVMF_VARS.fd
+          else
+            echo "AAVMF not found"
+            exit 1
+          fi
+          VARS_TMP=$(mktemp /tmp/arm64-vars-XXXXXX.fd)
+          cp "${VARS_FD}" "${VARS_TMP}"
+          SERIAL_LOG=/tmp/qemu-arm64.log
+          timeout 300 qemu-system-aarch64 \
+            -machine virt \
+            -cpu cortex-a57 \
+            -m 2G \
+            -smp 2 \
+            -drive if=pflash,format=raw,readonly=on,file=${CODE_FD} \
+            -drive if=pflash,format=raw,file=${VARS_TMP} \
+            -cdrom /mnt/data/agnostikOS/build/agnostikos-arm64.iso \
+            -display none \
+            -serial file:${SERIAL_LOG} \
+            -device virtio-net-pci,netdev=net0 \
+            -netdev user,id=net0 \
+            -no-reboot || true
+          # Check serial log for boot indicators
+          if grep -qi "Welcome to Agnostikos" "${SERIAL_LOG}"; then
+            echo "✅ ARM64 boot test PASSED"
+          elif grep -qi "Linux version" "${SERIAL_LOG}"; then
+            echo "✅ ARM64 boot test PASSED (kernel boot detected)"
+          elif grep -qi "Kernel panic" "${SERIAL_LOG}"; then
+            echo "❌ ARM64 boot test FAILED (kernel panic)"
+            cat "${SERIAL_LOG}"
+            exit 1
+          else
+            echo "❌ ARM64 boot test FAILED - no boot indicators found"
+            cat "${SERIAL_LOG}"
+            exit 1
+          fi
+          rm -f "${VARS_TMP}" "${SERIAL_LOG}"

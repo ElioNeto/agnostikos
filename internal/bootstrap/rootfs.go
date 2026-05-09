@@ -418,15 +418,19 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 		return fmt.Errorf("create rootfs: %w", err)
 	}
 
-	// Step 2: Toolchain — download dos tarballs
-	fmt.Println("\n=== Step 2/13: Download Toolchain ===")
-	if err := DownloadToolchain(cfg.TargetDir); err != nil {
-		return fmt.Errorf("download toolchain: %w", err)
-	}
-
 	tcCfg := ToolchainConfig{
 		TargetDir: cfg.TargetDir,
 		NumCPUs:   cfg.Jobs,
+	}
+
+	// Step 2: Toolchain — download dos tarballs
+	if !cfg.SkipToolchain {
+		fmt.Println("\n=== Step 2/13: Download Toolchain ===")
+		if err := DownloadToolchain(cfg.TargetDir); err != nil {
+			return fmt.Errorf("download toolchain: %w", err)
+		}
+	} else {
+		fmt.Println("\n=== Step 2/13: Download Toolchain (skipped) ===")
 	}
 
 	// Step 3: Build binutils
