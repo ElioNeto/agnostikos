@@ -146,8 +146,8 @@ func TestFindVmlinuz_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when kernel not found")
 	}
-	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("expected 'not found' error, got: %v", err)
+	if !strings.Contains(err.Error(), "no kernel found") {
+		t.Errorf("expected 'no kernel found' error, got: %v", err)
 	}
 }
 
@@ -313,8 +313,8 @@ func TestGenerateISO_TestMode_Fallback(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing kernel")
 	}
-	if !strings.Contains(err.Error(), "no vmlinuz") {
-		t.Errorf("expected 'no vmlinuz' error, got: %v", err)
+	if !strings.Contains(err.Error(), "no kernel found") {
+		t.Errorf("expected 'no kernel found' error, got: %v", err)
 	}
 }
 
