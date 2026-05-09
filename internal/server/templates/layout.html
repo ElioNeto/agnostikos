@@ -101,9 +101,43 @@
     .flex-wrap { flex-wrap: wrap; }
     .mt-2 { margin-top: 0.5rem; }
     .mb-2 { margin-bottom: 0.5rem; }
+    /* Auth dialog overlay */
+    .auth-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.7);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .auth-dialog {
+      background: #1e293b; border: 1px solid #334155;
+      border-radius: 12px; padding: 2rem; max-width: 420px; width: 90%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .auth-dialog h2 { color: #38bdf8; margin-bottom: 0.5rem; }
+    .auth-dialog p { color: #94a3b8; font-size: 0.875rem; margin-bottom: 1.5rem; }
+    .auth-dialog input { width: 100%; margin-bottom: 1rem; }
+    .auth-dialog .hint {
+      font-size: 0.75rem; color: #64748b; margin-top: 0.75rem;
+      background: #0f172a; padding: 0.75rem; border-radius: 6px;
+      word-break: break-all;
+    }
+    .auth-dialog .hint code { color: #f59e0b; }
   </style>
 </head>
 <body>
+  <!-- Auth Dialog -->
+  <div id="auth-overlay" class="auth-overlay" style="display:none;">
+    <div class="auth-dialog">
+      <h2>🔑 Authentication Required</h2>
+      <p>Enter your AgnostikOS authentication token to access the Web UI.</p>
+      <input type="text" id="auth-token-input" placeholder="Paste your token here" autocomplete="off">
+      <button id="auth-token-btn" style="width:100%;">Save Token</button>
+      <div class="hint">
+        Token not set? Check the server console output for the auto-generated token,
+        or set the <code>AGNOSTIKOS_TOKEN</code> environment variable.
+      </div>
+    </div>
+  </div>
+
   <nav>
     <strong style="color:#38bdf8; font-size:1.1rem;">AgnostikOS</strong>
     <a href="/">Dashboard</a>
@@ -113,5 +147,70 @@
   <div class="container">
     {{template "content" .}}
   </div>
+
+  <script>
+    (function() {
+      var STORAGE_KEY = 'agnostikos_token';
+
+      function getToken() {
+        return localStorage.getItem(STORAGE_KEY) || '';
+      }
+
+      function setToken(token) {
+        localStorage.setItem(STORAGE_KEY, token);
+      }
+
+      function updateSSEConnections(token) {
+        var els = document.querySelectorAll('[sse-connect]');
+        for (var i = 0; i < els.length; i++) {
+          var el = els[i];
+          var current = el.getAttribute('sse-connect');
+          var base = current.split('?')[0];
+          el.setAttribute('sse-connect', base + '?token=' + encodeURIComponent(token));
+        }
+      }
+
+      // Add X-Auth-Token to all HTMX requests
+      document.addEventListener('htmx:configRequest', function(evt) {
+        var t = getToken();
+        if (t) {
+          evt.detail.headers['X-Auth-Token'] = t;
+        }
+      });
+
+      var token = getToken();
+
+      if (token) {
+        // Update SSE connection URLs to include token
+        updateSSEConnections(token);
+      } else {
+        // Show auth dialog
+        var overlay = document.getElementById('auth-overlay');
+        if (overlay) {
+          overlay.style.display = 'flex';
+
+          var input = document.getElementById('auth-token-input');
+          var btn = document.getElementById('auth-token-btn');
+
+          function saveToken() {
+            var val = input.value.trim();
+            if (val) {
+              setToken(val);
+              overlay.style.display = 'none';
+              updateSSEConnections(val);
+              // Reload to re-initialize HTMX components with token
+              window.location.reload();
+            }
+          }
+
+          btn.addEventListener('click', saveToken);
+          input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') saveToken();
+          });
+          input.focus();
+        }
+      }
+    })();
+  </script>
 </body>
 </html>

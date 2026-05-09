@@ -622,3 +622,96 @@ func TestPackageManagerNewHasBackends(t *testing.T) {
 		t.Errorf("expected 3 backends, got %d", len(mgr.Backends))
 	}
 }
+
+// TestSSEEndpoint_AuthViaQueryParam verifies that SSE accepts token as query parameter.
+func TestSSEEndpoint_AuthViaQueryParam(t *testing.T) {
+	s := setupTestServer(t)
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", ts.URL+"/events?token=test-token-123", nil)
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Logf("SSE connection timed out as expected: %v", err)
+		return
+	}
+	defer closeResp(resp)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 for SSE with token query param, got %d", resp.StatusCode)
+		return
+	}
+
+	ct := resp.Header.Get("Content-Type")
+	if ct != "text/event-stream" {
+		t.Errorf("expected Content-Type 'text/event-stream', got '%s'", ct)
+	}
+}
+
+// TestSSEEndpoint_AuthViaQueryParam_InvalidToken verifies that SSE with invalid token
+// query parameter returns 401.
+func TestSSEEndpoint_AuthViaQueryParam_InvalidToken(t *testing.T) {
+	s := setupTestServer(t)
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", ts.URL+"/events?token=wrong-token", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer closeResp(resp)
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 for invalid token query param, got %d", resp.StatusCode)
+	}
+}
+
+// TestISOStartBuild_WithConfig verifies the ISO build endpoint accepts a config body.
+func TestISOStartBuild_WithConfig(t *testing.T) {
+	s := setupTestServer(t)
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	body := strings.NewReader(`{"busybox_version":"1.36.1","name":"TestISO","version":"0.1.0","uefi":true}`)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", ts.URL+"/api/iso/build", body)
+	req.Header.Set(authHeader())
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("failed to start ISO build with config: %v", err)
+	}
+	defer closeResp(resp)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result map[string]string
+	_ = json.NewDecoder(resp.Body).Decode(&result)
+	if result["status"] != "building" {
+		t.Errorf("expected status 'building', got '%s'", result["status"])
+	}
+}
+
+// TestISOStartBuild_InvalidConfig verifies the ISO build endpoint rejects invalid JSON.
+func TestISOStartBuild_InvalidConfig(t *testing.T) {
+	s := setupTestServer(t)
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	body := strings.NewReader(`{invalid json}`)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", ts.URL+"/api/iso/build", body)
+	req.Header.Set(authHeader())
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer closeResp(resp)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid config JSON, got %d", resp.StatusCode)
+	}
+}

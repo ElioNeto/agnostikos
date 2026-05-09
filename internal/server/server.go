@@ -108,12 +108,16 @@ func resolveAuthHash() string {
 	return hex.EncodeToString(h[:])
 }
 
-// withAuth wraps a handler to require X-Auth-Token
+// withAuth wraps a handler to require authentication via X-Auth-Token header
+// or token query parameter (the latter is required for SSE via EventSource).
 func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.Header.Get("X-Auth-Token")
 		if token == "" {
-			http.Error(w, "Missing X-Auth-Token header", http.StatusUnauthorized)
+			token = r.URL.Query().Get("token")
+		}
+		if token == "" {
+			http.Error(w, "Missing X-Auth-Token header or token query parameter", http.StatusUnauthorized)
 			return
 		}
 		h := sha256.Sum256([]byte(token))
@@ -433,6 +437,20 @@ func (s *Server) handleISOStatus(w http.ResponseWriter, r *http.Request) {
 
 // --- ISO Build ---
 
+// buildConfigWithDefaults applies default values to a BuildConfig.
+func buildConfigWithDefaults(cfg manager.BuildConfig) manager.BuildConfig {
+	if cfg.BusyboxVersion == "" {
+		cfg.BusyboxVersion = "1.36.1"
+	}
+	if cfg.Name == "" {
+		cfg.Name = "AgnostikOS"
+	}
+	if cfg.Version == "" {
+		cfg.Version = "0.1.0"
+	}
+	return cfg
+}
+
 func (s *Server) handleISOStartBuild(w http.ResponseWriter, r *http.Request) {
 	s.progressMu.Lock()
 	if s.progress != "" {
@@ -443,17 +461,38 @@ func (s *Server) handleISOStartBuild(w http.ResponseWriter, r *http.Request) {
 	s.progress = "starting"
 	s.progressMu.Unlock()
 
+	// Parse optional build config from request body
+	var cfg manager.BuildConfig
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+			s.progressMu.Lock()
+			s.progress = ""
+			s.progressMu.Unlock()
+			http.Error(w, "Invalid build configuration: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	cfg = buildConfigWithDefaults(cfg)
+
 	go func() {
 		s.progressMu.Lock()
 		s.progress = "building ISO..."
 		s.progressMu.Unlock()
-		s.broadcast(SSEEvent{Event: "iso:progress", Data: "building ISO..."})
 
-		time.Sleep(2 * time.Second)
+		s.broadcast(SSEEvent{Event: "iso:progress", Data: "Starting bootstrap..."})
+		s.broadcast(SSEEvent{Event: "iso:progress", Data: "Building ISO image, please wait..."})
+
+		err := s.mgr.Build(context.Background(), cfg)
 
 		s.progressMu.Lock()
 		s.progress = ""
 		s.progressMu.Unlock()
+
+		if err != nil {
+			s.broadcast(SSEEvent{Event: "iso:error", Data: err.Error()})
+			return
+		}
+
 		s.broadcast(SSEEvent{Event: "iso:done", Data: "ISO build complete"})
 	}()
 

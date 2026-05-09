@@ -49,27 +49,38 @@ func (m *AgnosticManager) ListBackends() []string {
 
 // BuildConfig contém os parâmetros para a construção completa da ISO AgnosticOS.
 type BuildConfig struct {
-	TargetDir     string
-	KernelVersion string
-	Arch          string
-	UEFI          bool
-	Jobs          string
-	SkipToolchain bool
-	SkipKernel    bool
-	SkipBusybox   bool
-	SkipInitramfs bool
-	SkipGRUB      bool
-	Force         bool
-	OutputISO     string
-	Name          string
-	Version       string
-	BootLabel     string
+	TargetDir      string `json:"target_dir,omitempty"`
+	BusyboxVersion string `json:"busybox_version,omitempty"`
+	Device         string `json:"device,omitempty"`
+	EFIPartition   string `json:"efi_partition,omitempty"`
+	KernelVersion  string `json:"kernel_version,omitempty"`
+	Arch           string `json:"arch,omitempty"`
+	UEFI           bool   `json:"uefi"`
+	Jobs           string `json:"jobs,omitempty"`
+	SkipToolchain  bool   `json:"skip_toolchain"`
+	SkipKernel     bool   `json:"skip_kernel"`
+	SkipBusybox    bool   `json:"skip_busybox"`
+	SkipInitramfs  bool   `json:"skip_initramfs"`
+	SkipGRUB       bool   `json:"skip_grub"`
+	Force          bool   `json:"force"`
+	OutputISO      string `json:"output_iso,omitempty"`
+	Name           string `json:"name,omitempty"`
+	Version        string `json:"version,omitempty"`
+	BootLabel      string `json:"boot_label,omitempty"`
 }
 
 // Build executa o pipeline completo de bootstrap e geração de ISO.
 func (m *AgnosticManager) Build(ctx context.Context, cfg BuildConfig) error {
+	busyboxVersion := cfg.BusyboxVersion
+	if busyboxVersion == "" {
+		busyboxVersion = "1.36.1"
+	}
+
 	bootstrapCfg := bootstrap.BootstrapConfig{
 		TargetDir:      cfg.TargetDir,
+		BusyboxVersion: busyboxVersion,
+		Device:         cfg.Device,
+		EFIPartition:   cfg.EFIPartition,
 		KernelVersion:  cfg.KernelVersion,
 		Arch:           cfg.Arch,
 		UEFI:           cfg.UEFI,
