@@ -579,3 +579,220 @@ func TestWindowSize(t *testing.T) {
 		t.Errorf("expected width=100, height=40, got %d, %d", m2.width, m2.height)
 	}
 }
+
+// --- List view tests ---
+
+func TestListTransition_FromBackendListView(t *testing.T) {
+	m := newTestModel()
+
+	m = sendKey(m, "l")
+
+	if m.viewState != ListView {
+		t.Errorf("expected ListView, got %v", m.viewState)
+	}
+	if !m.loading {
+		t.Error("expected loading to be true when entering list view")
+	}
+}
+
+func TestListView_ReceiveResults(t *testing.T) {
+	m := newTestModel()
+	m = sendKey(m, "l")
+
+	msg := listResultsMsg{
+		results: []string{"firefox", "git", "linux"},
+		err:     nil,
+	}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	if m2.loading {
+		t.Error("expected loading to be false after receiving results")
+	}
+	if len(m2.listResults) != 3 {
+		t.Errorf("expected 3 list results, got %d", len(m2.listResults))
+	}
+	if m2.listCursor != 0 {
+		t.Errorf("expected cursor at 0, got %d", m2.listCursor)
+	}
+}
+
+func TestListView_NavigateDown(t *testing.T) {
+	m := newTestModel()
+	m = sendKey(m, "l")
+	msg := listResultsMsg{results: []string{"pkg1", "pkg2", "pkg3"}, err: nil}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	m2 = sendKey(m2, "j")
+	if m2.listCursor != 1 {
+		t.Errorf("expected cursor 1, got %d", m2.listCursor)
+	}
+
+	m2 = sendKey(m2, "down")
+	if m2.listCursor != 2 {
+		t.Errorf("expected cursor 2, got %d", m2.listCursor)
+	}
+
+	// Should not go past last
+	m2 = sendKey(m2, "down")
+	if m2.listCursor != 2 {
+		t.Errorf("expected cursor to stay at 2, got %d", m2.listCursor)
+	}
+}
+
+func TestListView_NavigateUp(t *testing.T) {
+	m := newTestModel()
+	m = sendKey(m, "l")
+	msg := listResultsMsg{results: []string{"pkg1", "pkg2", "pkg3"}, err: nil}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+	m2.listCursor = 2
+
+	m2 = sendKey(m2, "k")
+	if m2.listCursor != 1 {
+		t.Errorf("expected cursor 1, got %d", m2.listCursor)
+	}
+
+	m2 = sendKey(m2, "up")
+	if m2.listCursor != 0 {
+		t.Errorf("expected cursor 0, got %d", m2.listCursor)
+	}
+
+	// Should not go past first
+	m2 = sendKey(m2, "up")
+	if m2.listCursor != 0 {
+		t.Errorf("expected cursor to stay at 0, got %d", m2.listCursor)
+	}
+}
+
+func TestListView_EmptyResults(t *testing.T) {
+	m := newTestModel()
+	m = sendKey(m, "l")
+	msg := listResultsMsg{results: nil, err: nil}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	if m2.listResults != nil {
+		t.Errorf("expected nil results, got %v", m2.listResults)
+	}
+	if m2.listErr != nil {
+		t.Errorf("expected no error, got %v", m2.listErr)
+	}
+}
+
+func TestListView_Error(t *testing.T) {
+	m := newTestModel()
+	m = sendKey(m, "l")
+	msg := listResultsMsg{results: nil, err: errors.New("list error")}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	if m2.listErr == nil {
+		t.Error("expected error, got nil")
+	}
+	if m2.listResults != nil {
+		t.Errorf("expected nil results on error, got %v", m2.listResults)
+	}
+}
+
+func TestListView_EscapeToBackendList(t *testing.T) {
+	m := newTestModel()
+	m = sendKey(m, "l")
+	msg := listResultsMsg{results: []string{"pkg1"}, err: nil}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	m2 = sendEsc(m2)
+	if m2.viewState != BackendListView {
+		t.Errorf("expected BackendListView after esc, got %v", m2.viewState)
+	}
+	if m2.listResults != nil {
+		t.Errorf("expected listResults cleared, got %v", m2.listResults)
+	}
+}
+
+// --- Build view tests ---
+
+func TestBuildTransition_FromBackendListView(t *testing.T) {
+	m := newTestModel()
+
+	m = sendKey(m, "b")
+
+	if m.viewState != BuildView {
+		t.Errorf("expected BuildView, got %v", m.viewState)
+	}
+	if !m.loading {
+		t.Error("expected loading to be true when entering build view")
+	}
+}
+
+func TestBuildView_CompletionSuccess(t *testing.T) {
+	m := newTestModel()
+	m = sendKey(m, "b")
+
+	// Receive completion
+	msg := buildCompletedMsg{err: nil}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	if m2.loading {
+		t.Error("expected loading to be false after completion")
+	}
+	if !m2.buildDone {
+		t.Error("expected buildDone to be true")
+	}
+	if m2.buildErr != nil {
+		t.Errorf("expected no error, got %v", m2.buildErr)
+	}
+}
+
+func TestBuildView_CompletionError(t *testing.T) {
+	m := newTestModel()
+	m = sendKey(m, "b")
+
+	msg := buildCompletedMsg{err: errors.New("build failed")}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	if m2.loading {
+		t.Error("expected loading to be false after error")
+	}
+	if !m2.buildDone {
+		t.Error("expected buildDone to be true even on error")
+	}
+	if m2.buildErr == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestBuildView_EscapeToBackendList(t *testing.T) {
+	m := newTestModel()
+	m = sendKey(m, "b")
+	msg := buildCompletedMsg{err: nil}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	m2 = sendEsc(m2)
+	if m2.viewState != BackendListView {
+		t.Errorf("expected BackendListView after esc, got %v", m2.viewState)
+	}
+}
+
+func TestListView_ViewRendering(t *testing.T) {
+	m := newTestModel()
+	m = sendKey(m, "l")
+	view := m.View()
+	if view == "" {
+		t.Error("expected non-empty list view")
+	}
+}
+
+func TestBuildView_ViewRendering(t *testing.T) {
+	m := newTestModel()
+	m = sendKey(m, "b")
+	view := m.View()
+	if view == "" {
+		t.Error("expected non-empty build view")
+	}
+}

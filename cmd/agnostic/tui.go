@@ -20,6 +20,8 @@ Screens:
   - Backend selection (pacman, nix, flatpak)
   - Package search with text input
   - Package detail with install/remove actions
+  - List installed packages
+  - Build AgnosticOS ISO
 
 Use arrow keys to navigate, Enter to select, Esc to go back.`,
 	Args: cobra.NoArgs,

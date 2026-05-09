@@ -2,6 +2,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -20,6 +21,8 @@ const (
 	BackendListView ViewState = iota
 	SearchView
 	PackageDetailView
+	ListView
+	BuildView
 )
 
 // Style definitions for the TUI.
@@ -57,6 +60,17 @@ type actionCompletedMsg struct {
 	err    error
 }
 
+// listResultsMsg carries async list results back to the update loop.
+type listResultsMsg struct {
+	results []string
+	err     error
+}
+
+// buildCompletedMsg signals that a build operation has finished.
+type buildCompletedMsg struct {
+	err error
+}
+
 // Model is the main Bubble Tea model implementing tea.Model.
 type Model struct {
 	manager *manager.AgnosticManager
@@ -73,6 +87,15 @@ type Model struct {
 
 	// Package detail
 	selectedPkg string
+
+	// List view
+	listResults []string
+	listCursor  int
+	listErr     error
+
+	// Build view
+	buildErr  error
+	buildDone bool
 
 	// Async operations
 	spinner   spinner.Model
@@ -107,6 +130,7 @@ func InitialModel(mgr *manager.AgnosticManager) Model {
 		cursor:      0,
 		searchInput: ti,
 		spinner:     s,
+		listCursor:  0,
 	}
 }
 
@@ -139,6 +163,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSearchViewKey(msg)
 		case PackageDetailView:
 			return m.handlePackageDetailKey(msg)
+		case ListView:
+			return m.handleListViewKey(msg)
+		case BuildView:
+			return m.handleBuildViewKey(msg)
 		}
 
 	case searchResultsMsg:
@@ -163,6 +191,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.actionErr = nil
 			m.statusMsg = fmt.Sprintf("%s of '%s' completed successfully",
 				msg.action, msg.pkg)
+		}
+		return m, nil
+
+	case listResultsMsg:
+		m.loading = false
+		if msg.err != nil {
+			m.listErr = msg.err
+			m.listResults = nil
+		} else {
+			m.listErr = nil
+			m.listResults = msg.results
+			m.listCursor = 0
+		}
+		return m, nil
+
+	case buildCompletedMsg:
+		m.loading = false
+		m.buildDone = true
+		if msg.err != nil {
+			m.buildErr = msg.err
+		} else {
+			m.buildErr = nil
 		}
 		return m, nil
 
@@ -197,6 +247,19 @@ func (m Model) handleBackendListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchErr = nil
 		m.searchCursor = 0
 		return m, textinput.Blink
+	case "l":
+		m.viewState = ListView
+		m.loading = true
+		m.listResults = nil
+		m.listErr = nil
+		m.listCursor = 0
+		return m, m.listCmd()
+	case "b":
+		m.viewState = BuildView
+		m.loading = true
+		m.buildErr = nil
+		m.buildDone = false
+		return m, m.buildCmd()
 	}
 	return m, nil
 }
@@ -299,6 +362,62 @@ func (m Model) removeCmd(pkg string) tea.Cmd {
 	}
 }
 
+// listCmd returns a tea.Cmd that lists installed packages asynchronously.
+func (m Model) listCmd() tea.Cmd {
+	return func() tea.Msg {
+		backend := m.backends[m.cursor]
+		svc := m.manager.Backends[backend]
+		results, err := svc.List()
+		return listResultsMsg{results: results, err: err}
+	}
+}
+
+// buildCmd returns a tea.Cmd that runs the full ISO build asynchronously.
+func (m Model) buildCmd() tea.Cmd {
+	return func() tea.Msg {
+		cfg := manager.BuildConfig{
+			Name:          "AgnostikOS",
+			Version:       "0.1.0",
+			KernelVersion: "6.6",
+		}
+		err := m.manager.Build(context.Background(), cfg)
+		return buildCompletedMsg{err: err}
+	}
+}
+
+// handleListViewKey processes key presses on the list view screen.
+func (m Model) handleListViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k":
+		if len(m.listResults) > 0 && m.listCursor > 0 {
+			m.listCursor--
+		}
+	case "down", "j":
+		if len(m.listResults) > 0 && m.listCursor < len(m.listResults)-1 {
+			m.listCursor++
+		}
+	case "esc":
+		m.viewState = BackendListView
+		m.loading = false
+		m.listResults = nil
+		m.listCursor = 0
+		m.listErr = nil
+	}
+	return m, nil
+}
+
+// handleBuildViewKey processes key presses on the build view screen.
+func (m Model) handleBuildViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.viewState = BackendListView
+		m.loading = false
+		m.buildErr = nil
+		m.buildDone = false
+	}
+	return m, nil
+}
+
 // View renders the current screen based on viewState.
 func (m Model) View() string {
 	switch m.viewState {
@@ -308,6 +427,10 @@ func (m Model) View() string {
 		return m.searchView()
 	case PackageDetailView:
 		return m.packageDetailView()
+	case ListView:
+		return m.listView()
+	case BuildView:
+		return m.buildView()
 	default:
 		return "Unknown view state"
 	}
@@ -331,7 +454,7 @@ func (m Model) backendListView() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("↑/↓: navigate • enter: select • q: quit"))
+	b.WriteString(helpStyle.Render("↑/↓: navigate • enter: search • l: list • b: build • q: quit"))
 
 	return b.String()
 }
@@ -392,5 +515,56 @@ func (m Model) packageDetailView() string {
 	b.WriteString("[i] Install  [r] Remove\n")
 	b.WriteString(helpStyle.Render("esc: back • q: quit"))
 
+	return b.String()
+}
+
+// listView renders the list of installed packages.
+func (m Model) listView() string {
+	var b strings.Builder
+	backend := m.backends[m.cursor]
+	b.WriteString(titleStyle.Render("Installed Packages in: " + backend))
+	b.WriteString("\n\n")
+
+	switch {
+	case m.loading:
+		fmt.Fprintf(&b, "  %s Loading...\n", m.spinner.View())
+	case m.listErr != nil:
+		b.WriteString(errorStyle.Render(fmt.Sprintf("\nError: %s\n", m.listErr)))
+	case len(m.listResults) == 0:
+		b.WriteString("No packages found.\n")
+	default:
+		fmt.Fprintf(&b, "Results (%d):\n\n", len(m.listResults))
+		for i, result := range m.listResults {
+			line := "  " + result
+			if i == m.listCursor {
+				line = selectedStyle.Render("> " + result)
+			}
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
+	}
+
+	b.WriteString("\n")
+	b.WriteString(helpStyle.Render("↑/↓: navigate • esc: back • q: quit"))
+	return b.String()
+}
+
+// buildView renders the build progress or result.
+func (m Model) buildView() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("Build AgnosticOS ISO"))
+	b.WriteString("\n\n")
+
+	switch {
+	case m.loading:
+		fmt.Fprintf(&b, "  %s Building... This may take a while.\n", m.spinner.View())
+	case m.buildErr != nil:
+		b.WriteString(errorStyle.Render(fmt.Sprintf("\nBuild failed: %s\n", m.buildErr)))
+	case m.buildDone:
+		b.WriteString(successStyle.Render("\nBuild completed successfully!\n"))
+	}
+
+	b.WriteString("\n")
+	b.WriteString(helpStyle.Render("esc: back • q: quit"))
 	return b.String()
 }
