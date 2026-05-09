@@ -9,6 +9,27 @@
 
 ---
 
+## 🚀 Installation
+
+### Via install script (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ElioNeto/agnostikos/main/scripts/install.sh | sh
+```
+
+The script automatically detects your architecture (amd64 / arm64), fetches the latest release from GitHub, verifies the SHA256 checksum, and installs the `agnostic` binary to `/usr/local/bin` (or `~/.local/bin` as fallback).
+
+### Manual download
+
+Download the pre-built binary for your platform from the [Releases page](https://github.com/ElioNeto/agnostikos/releases), extract it, and place it in your `PATH`:
+
+```bash
+tar -xzf agnostikos_*.tar.gz
+sudo install agnostic /usr/local/bin/
+```
+
+---
+
 ## 📖 Overview
 
 AgnosticOS is a **meta-wrapper package manager** that abstracts multiple package ecosystems behind a single, unified command-line interface. Instead of learning `pacman -S`, `nix profile install`, and `flatpak install` separately, you use `agnostic install` — the tool dispatches to the right backend automatically.
@@ -237,6 +258,24 @@ Each release includes:
 - `agnostikos_<version>_linux_amd64.tar.gz`
 - `agnostikos_<version>_linux_arm64.tar.gz`
 - `checksums.txt` (SHA256)
+
+### Man pages
+
+Man pages are included in the release archive under `docs/man/`. To install them:
+
+```bash
+sudo install -d /usr/local/share/man/man1
+sudo install -m 644 docs/man/* /usr/local/share/man/man1/
+sudo mandb  # update the man database
+```
+
+You can also generate the latest man pages from source:
+
+```bash
+make docs
+sudo install -m 644 docs/man/* /usr/local/share/man/man1/
+sudo mandb
+```
 
 ---
 

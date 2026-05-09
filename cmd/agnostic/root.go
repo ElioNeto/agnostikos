@@ -75,6 +75,11 @@ func Execute() {
 	}
 }
 
+// RootCmd returns the root command for use by external tooling (e.g. doc generation).
+func RootCmd() *cobra.Command {
+	return rootCmd
+}
+
 func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	rootCmd.PersistentFlags().StringVarP(&configFile, "config", "c", "", "Path to agnostic.yaml config file")

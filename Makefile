@@ -1,4 +1,4 @@
-.PHONY: help build test clean install test-iso test-iso-headless lint fmt deps iso bootstrap minimal-rootfs minimal-iso test-minimal-iso-headless
+.PHONY: help build test clean install test-iso test-iso-headless lint fmt deps iso bootstrap minimal-rootfs minimal-iso test-minimal-iso-headless docs
 
 BINARY_NAME=agnostic
 
@@ -105,6 +105,9 @@ iso: build ## Build ISO from RootFS — output vai para $(BUILD_DIR)/agnostikos-
 
 bootstrap: build ## Bootstrap RootFS into $(LFS) — use ARGS="--skip-grub" etc.
 	@sudo $(BUILD_DIR)/$(BINARY_NAME) bootstrap $(ARGS)
+
+docs: ## Generate man pages and Markdown docs
+	$(GO) run ./cmd/agnostic/gen-docs/
 
 dev: ## Run in development mode
 	@$(GO) run . --help
