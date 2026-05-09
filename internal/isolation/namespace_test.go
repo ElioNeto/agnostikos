@@ -14,8 +14,8 @@ import (
 
 func TestNewIsolationConfig_Defaults(t *testing.T) {
 	cfg := NewIsolationConfig()
-	expected := syscall.CLONE_NEWNS | syscall.CLONE_NEWPID |
-		syscall.CLONE_NEWUTS | syscall.CLONE_NEWIPC
+	expected := uintptr(syscall.CLONE_NEWNS | syscall.CLONE_NEWPID |
+		syscall.CLONE_NEWUTS | syscall.CLONE_NEWIPC)
 	if cfg.Cloneflags != expected {
 		t.Errorf("expected Cloneflags=%d, got %d", expected, cfg.Cloneflags)
 	}
