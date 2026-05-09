@@ -29,9 +29,13 @@ var (
 )
 
 var buildCmd = &cobra.Command{
-	Use:   "build [recipe.yaml]",
-	Short: "Build an AgnosticOS image from a recipe",
+	Use:        "build [recipe.yaml]",
+	Short:      "Build an AgnosticOS image from a recipe",
+	Deprecated: "use 'agnostic bootstrap --recipe <file>' instead",
 	Long: `Build a bootable ISO from a YAML recipe.
+
+DEPRECATED: use 'agnostic bootstrap --recipe <file>' instead.
+This command is kept for backward compatibility and will be removed in a future release.
 
 Steps:
   1. Create RootFS with FHS structure
@@ -40,7 +44,10 @@ Steps:
 
 Example:
   agnostic build recipes/base.yaml
-  agnostic build recipes/base.yaml --output custom.iso`,
+  agnostic build recipes/base.yaml --output custom.iso
+
+See also:
+  agnostic bootstrap --recipe recipes/base.yaml`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		data, err := os.ReadFile(args[0])

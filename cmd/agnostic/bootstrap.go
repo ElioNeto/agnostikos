@@ -3,9 +3,11 @@ package agnostic
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/ElioNeto/agnostikos/internal/bootstrap"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -27,6 +29,7 @@ var (
 	bootstrapDotfilesSource  string
 	bootstrapConfigsDir      string
 	bootstrapAutologinUser   string
+	bootstrapRecipe          string
 )
 
 var bootstrapCmd = &cobra.Command{
@@ -43,11 +46,42 @@ O target directory defaults to $AGNOSTICOS_ROOT ou /mnt/data/agnostikOS/rootfs.
 Todo o build fica isolado em /mnt/data/agnostikOS — nada toca o sistema host.
 
 Cada step é automático: se o artefato já existir, o step é ignorado.
-Use --force para recompilar tudo mesmo que já exista.`,
+Use --force para recompilar tudo mesmo que já exista.
+
+Use --recipe <file> to load settings from a YAML recipe (kernel version, arch, UEFI).
+This provides a simpler build path — the canonical way to generate bootable ISOs.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target := bootstrapTarget
 		if len(args) > 0 {
 			target = args[0]
+		}
+
+		// If --recipe was provided, load it early and apply its values as defaults.
+		// Explicit CLI flags still take precedence (checked via cmd.Flags().Changed).
+		if bootstrapRecipe != "" {
+			data, err := os.ReadFile(bootstrapRecipe)
+			if err != nil {
+				return fmt.Errorf("failed to read recipe %q: %w", bootstrapRecipe, err)
+			}
+			var r Recipe
+			if err := yaml.Unmarshal(data, &r); err != nil {
+				return fmt.Errorf("failed to parse recipe %q: %w", bootstrapRecipe, err)
+			}
+			if !cmd.Flags().Changed("kernel-version") && r.Build.KernelVersion != "" {
+				bootstrapKernelVer = r.Build.KernelVersion
+			}
+			if !cmd.Flags().Changed("arch") {
+				recipeArch := r.Build.Arch
+				if recipeArch == "" {
+					recipeArch = r.Arch
+				}
+				if recipeArch != "" {
+					bootstrapArch = recipeArch
+				}
+			}
+			if !cmd.Flags().Changed("uefi") {
+				bootstrapUEFI = r.Build.UEFI
+			}
 		}
 
 		cfg := bootstrap.BootstrapConfig{
@@ -95,5 +129,6 @@ func init() {
 	bootstrapCmd.Flags().StringVar(&bootstrapDotfilesSource, "dotfiles-source", "", "Git URL or local path for external dotfiles repository")
 	bootstrapCmd.Flags().StringVar(&bootstrapConfigsDir, "configs-dir", "", "Path to the configs/ directory with embedded dotfiles")
 	bootstrapCmd.Flags().StringVar(&bootstrapAutologinUser, "autologin-user", "", "Username for automatic login on tty1 (getty autologin)")
+	bootstrapCmd.Flags().StringVar(&bootstrapRecipe, "recipe", "", "Path to a YAML recipe file to load defaults (kernel version, arch, UEFI). This is the canonical way to configure a bootstrap build.")
 	rootCmd.AddCommand(bootstrapCmd)
 }

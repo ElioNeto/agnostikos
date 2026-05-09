@@ -24,22 +24,28 @@ type ISOConfig struct {
 
 func findVmlinuz(rootfs, kernelVersion string) (string, error) {
 	bootDir := filepath.Join(rootfs, "boot")
-	if kernelVersion != "" {
-		p := filepath.Join(bootDir, "vmlinuz-"+kernelVersion)
-		if _, err := os.Stat(p); err != nil {
-			return "", fmt.Errorf("kernel not found at %s: %w", p, err)
+
+	// Try amd64 naming first (vmlinuz-*), then arm64 naming (Image-*)
+	for _, prefix := range []string{"vmlinuz", "Image"} {
+		if kernelVersion != "" {
+			p := filepath.Join(bootDir, prefix+"-"+kernelVersion)
+			if _, err := os.Stat(p); err == nil {
+				fmt.Printf("[iso] using kernel: %s\n", p)
+				return p, nil
+			}
+		} else {
+			matches, err := filepath.Glob(filepath.Join(bootDir, prefix+"-*"))
+			if err != nil {
+				return "", fmt.Errorf("glob %s-*: %w", prefix, err)
+			}
+			if len(matches) > 0 {
+				fmt.Printf("[iso] using kernel: %s\n", matches[0])
+				return matches[0], nil
+			}
 		}
-		return p, nil
 	}
-	matches, err := filepath.Glob(filepath.Join(bootDir, "vmlinuz-*"))
-	if err != nil {
-		return "", fmt.Errorf("glob vmlinuz: %w", err)
-	}
-	if len(matches) == 0 {
-		return "", fmt.Errorf("no vmlinuz-* found in %s — run 'make bootstrap' first", bootDir)
-	}
-	fmt.Printf("[iso] using kernel: %s\n", matches[0])
-	return matches[0], nil
+
+	return "", fmt.Errorf("no kernel found in %s — tried vmlinuz-* and Image-*; run 'make bootstrap' first", bootDir)
 }
 
 func GenerateISO(cfg ISOConfig) error {
@@ -196,7 +202,7 @@ exec switch_root /mnt/root /sbin/init
 // necessária para boot OVMF.
 func runGrubMkrescue(isoDir string, cfg ISOConfig) error {
 	if _, err := exec.LookPath("grub-mkrescue"); err != nil {
-		return errors.New("grub-mkrescue not found — install grub-common and grub-efi-amd64-bin")
+		return errors.New("grub-mkrescue not found — install grub-common and grub-efi-amd64-bin (x86_64) or grub-efi-arm64-bin (arm64)")
 	}
 
 	label := cfg.BootLabel

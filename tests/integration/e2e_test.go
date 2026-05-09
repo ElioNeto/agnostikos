@@ -60,6 +60,11 @@ func TestE2E_PackageLifecycle(t *testing.T) {
 	}
 	t.Logf("Installed packages: %v", list)
 
+	t.Log("=== Update the package ===")
+	if err := mockSvc.Update("htop"); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
 	t.Log("=== Remove the package ===")
 	if err := mockSvc.Remove("htop"); err != nil {
 		t.Fatalf("Remove failed: %v", err)
