@@ -97,7 +97,9 @@ func TestE2E_ConfigInstall(t *testing.T) {
 	t.Logf("Config loaded: profile=%s, default backend=%s", cfg.Profile, cfg.Backends.Default)
 
 	t.Log("=== Install packages from config ===")
-	allPkgs := append(cfg.Packages.Base, cfg.Packages.Extra...)
+	allPkgs := make([]string, 0, len(cfg.Packages.Base)+len(cfg.Packages.Extra))
+	allPkgs = append(allPkgs, cfg.Packages.Base...)
+	allPkgs = append(allPkgs, cfg.Packages.Extra...)
 	for _, pkg := range allPkgs {
 		svc, ok := mgr.Backends[cfg.Backends.Default]
 		if !ok {

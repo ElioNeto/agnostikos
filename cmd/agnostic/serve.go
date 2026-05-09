@@ -1,6 +1,7 @@
 package agnostic
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -31,7 +32,7 @@ Examples:
 		mgr := manager.NewAgnosticManager()
 		srv := server.New(mgr)
 
-		addr := fmt.Sprintf("127.0.0.1:%s", servePort)
+		addr := "127.0.0.1:" + servePort
 		fmt.Printf("🌐 Web UI starting at http://%s\n", addr)
 		fmt.Println("Press Ctrl+C to stop")
 
@@ -52,12 +53,18 @@ func init() {
 
 // openBrowser tries to open a URL in the default browser.
 func openBrowser(url string) {
+	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "linux":
-		exec.Command("xdg-open", url).Start() //nolint:errcheck
+		cmd = exec.CommandContext(context.Background(), "xdg-open", url)
 	case "darwin":
-		exec.Command("open", url).Start() //nolint:errcheck
+		cmd = exec.CommandContext(context.Background(), "open", url)
 	case "windows":
-		exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start() //nolint:errcheck
+		cmd = exec.CommandContext(context.Background(), "rundll32", "url.dll,FileProtocolHandler", url)
+	}
+	if cmd != nil {
+		if err := cmd.Start(); err != nil {
+			fmt.Printf("Failed to open browser: %v\n", err)
+		}
 	}
 }

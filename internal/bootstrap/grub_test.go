@@ -126,8 +126,8 @@ func TestHasGrubInstall_Found(t *testing.T) {
 	}
 
 	origPath := os.Getenv("PATH")
-	t.Cleanup(func() { os.Setenv("PATH", origPath) })
-	os.Setenv("PATH", tmp+string(os.PathListSeparator)+origPath)
+	t.Cleanup(func() { _ = os.Setenv("PATH", origPath) })
+	_ = os.Setenv("PATH", tmp+string(os.PathListSeparator)+origPath)
 
 	if !hasGrubInstall() {
 		t.Error("hasGrubInstall() should return true when grub-install is in PATH")
@@ -137,8 +137,8 @@ func TestHasGrubInstall_Found(t *testing.T) {
 func TestHasGrubInstall_NotFound(t *testing.T) {
 	// Temporarily set PATH to an empty directory so exec.LookPath fails
 	origPath := os.Getenv("PATH")
-	t.Cleanup(func() { os.Setenv("PATH", origPath) })
-	os.Setenv("PATH", "/dev/null") // not a directory, LookPath will fail
+	t.Cleanup(func() { _ = os.Setenv("PATH", origPath) })
+	_ = os.Setenv("PATH", "/dev/null") // not a directory, LookPath will fail
 
 	if hasGrubInstall() {
 		t.Error("hasGrubInstall() should return false when grub-install is not in PATH")

@@ -2,13 +2,13 @@ package bootstrap
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -60,7 +60,7 @@ func clampCPUs(n int) string {
 	if n > 4 {
 		n = 4
 	}
-	return fmt.Sprintf("%d", n)
+	return strconv.Itoa(n)
 }
 
 // ---------------------------------------------------------------------------
@@ -112,7 +112,7 @@ func writeFakeTarball(t *testing.T, path string) {
 	// Try xz compression first
 	if _, err := exec.LookPath("xz"); err == nil {
 		// Create a minimal tar + xz pipeline
-		cmd := exec.Command("sh", "-c", "tar -cf - --files-from /dev/null | xz > "+path)
+		cmd := exec.CommandContext(context.Background(), "sh", "-c", "tar -cf - --files-from /dev/null | xz > "+path)
 		if out, err := cmd.CombinedOutput(); err == nil {
 			_ = out
 			return
@@ -122,7 +122,7 @@ func writeFakeTarball(t *testing.T, path string) {
 	// Fallback: create a plain tar (not compressed)
 	// We'll name it .tar instead
 	tarPath := strings.TrimSuffix(path, ".xz") + ".tar"
-	cmd := exec.Command("tar", "-cf", tarPath, "--files-from", "/dev/null")
+	cmd := exec.CommandContext(context.Background(), "tar", "-cf", tarPath, "--files-from", "/dev/null")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to create fake tarball: %v\n%s", err, string(out))
 	}
@@ -139,7 +139,7 @@ func writeFakeTarballPlain(t *testing.T, path string) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("tar", "-cf", path, "--files-from", "/dev/null")
+	cmd := exec.CommandContext(context.Background(), "tar", "-cf", path, "--files-from", "/dev/null")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to create fake tarball: %v\n%s", err, string(out))
 	}

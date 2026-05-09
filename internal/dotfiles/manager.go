@@ -4,6 +4,8 @@
 package dotfiles
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -138,7 +140,7 @@ func (m *Manager) Diff(configsDir, homeDir string) ([]string, error) {
 		// Verifica se a origem existe em configsDir
 		srcInfo, err := os.Stat(src)
 		if os.IsNotExist(err) {
-			diffs = append(diffs, fmt.Sprintf("MISSING (source): %s", entry.SourceRel))
+			diffs = append(diffs, "MISSING (source): "+entry.SourceRel)
 			continue
 		} else if err != nil {
 			return nil, fmt.Errorf("stat source %s: %w", src, err)
@@ -169,14 +171,12 @@ func (m *Manager) Diff(configsDir, homeDir string) ([]string, error) {
 // e retorna o caminho para o diretório clonado.
 func (m *Manager) cloneExternal(destDir string) (string, error) {
 	if m.From == "" {
-		return "", fmt.Errorf("no source URL set")
+		return "", errors.New("no source URL set")
 	}
 
 	// Extrai o nome do repositório da URL para criar um subdiretório
 	repoName := filepath.Base(m.From)
-	if strings.HasSuffix(repoName, ".git") {
-		repoName = strings.TrimSuffix(repoName, ".git")
-	}
+	repoName = strings.TrimSuffix(repoName, ".git")
 	cloneDir := filepath.Join(destDir, repoName)
 
 	// Se já existe, remove para clonar fresco
@@ -186,7 +186,7 @@ func (m *Manager) cloneExternal(destDir string) (string, error) {
 		}
 	}
 
-	cmd := exec.Command("git", "clone", "--depth=1", m.From, cloneDir)
+	cmd := exec.CommandContext(context.Background(), "git", "clone", "--depth=1", m.From, cloneDir)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git clone %s: %w\n%s", m.From, err, string(output))

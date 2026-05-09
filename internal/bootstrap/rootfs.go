@@ -263,7 +263,7 @@ func configureDefaultShell(rootfsDir string) error {
 		return fmt.Errorf("read /etc/shells: %w", err)
 	}
 	if !hasShellEntry(string(data), "/bin/zsh") {
-		f, err := os.OpenFile(shellsPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+		f, err := os.OpenFile(shellsPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
 			return fmt.Errorf("open /etc/shells: %w", err)
 		}
@@ -353,7 +353,7 @@ ExecStart=-/sbin/agetty --autologin %s --noclear %%I $TERM
 
 // setupMiseRuntimes instala runtimes via mise no rootfs.
 // Verifica se o binário mise existe e executa mise install para cada runtime listado.
-func setupMiseRuntimes(rootfsDir string, runtimes []string) {
+func setupMiseRuntimes(ctx context.Context, rootfsDir string, runtimes []string) {
 	if len(runtimes) == 0 {
 		return
 	}
@@ -387,7 +387,7 @@ fi
 	// Run mise install for each runtime
 	for _, rt := range runtimes {
 		fmt.Printf("[mise] Installing %s...\n", rt)
-		cmd := exec.Command(miseBin, "install", rt)
+		cmd := exec.CommandContext(ctx, miseBin, "install", rt)
 		cmd.Env = append(os.Environ(), "MISE_YES=1")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
@@ -554,7 +554,7 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	// Step 11: Setup mise runtimes (optional)
 	if len(cfg.MiseRuntimes) > 0 {
 		fmt.Println("\n=== Step 11/13: Setup Mise Runtimes ===")
-		setupMiseRuntimes(cfg.TargetDir, cfg.MiseRuntimes)
+		setupMiseRuntimes(ctx, cfg.TargetDir, cfg.MiseRuntimes)
 	} else {
 		fmt.Println("\n=== Step 11/13: Setup Mise Runtimes (skipped) ===")
 	}

@@ -1,6 +1,7 @@
 package dotfiles
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -56,7 +57,7 @@ func setupTestDirs(t *testing.T) (configsDir, homeDir string, cleanup func()) {
 	}
 
 	cleanup = func() {
-		os.RemoveAll(root)
+		_ = os.RemoveAll(root)
 	}
 
 	return configsDir, homeDir, cleanup
@@ -298,8 +299,12 @@ func TestApply_MissingSource_DoesNotError(t *testing.T) {
 	root := t.TempDir()
 	configsDir := filepath.Join(root, "configs")
 	homeDir := filepath.Join(root, "home")
-	os.MkdirAll(configsDir, 0755)
-	os.MkdirAll(homeDir, 0755)
+	if err := os.MkdirAll(configsDir, 0755); err != nil {
+		t.Fatalf("mkdir configs: %v", err)
+	}
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
 
 	mgr := New("")
 	// Should not error, just skip missing files
@@ -388,7 +393,7 @@ func TestApply_ExternalGitClone(t *testing.T) {
 
 // runGit executes a git command in the given directory.
 func runGit(dir string, args ...string) error {
-	cmd := exec.Command("git", args...)
+	cmd := exec.CommandContext(context.Background(), "git", args...)
 	cmd.Dir = dir
 	cmd.Stdout = nil
 	cmd.Stderr = nil

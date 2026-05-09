@@ -182,7 +182,7 @@ func TestUnshare_UserNamespaceAvailable(t *testing.T) {
 	// command. This validates the concept without requiring CAP_SYS_ADMIN
 	// for the test process itself, because unshare -U creates a new user
 	// namespace where the process is effectively root.
-	out, err := exec.Command("unshare", "-U", "true").CombinedOutput()
+	out, err := exec.CommandContext(context.Background(), "unshare", "-U", "true").CombinedOutput()
 	if err != nil {
 		t.Skipf("unshare -U true failed — user namespaces may be unavailable: %v\n%s", err, string(out))
 	}
@@ -190,35 +190,35 @@ func TestUnshare_UserNamespaceAvailable(t *testing.T) {
 
 func TestUnshare_MountNamespace(t *testing.T) {
 	// Mount namespace via unshare -m (needs user namespace in front).
-	out, err := exec.Command("unshare", "-U", "-m", "true").CombinedOutput()
+	out, err := exec.CommandContext(context.Background(), "unshare", "-U", "-m", "true").CombinedOutput()
 	if err != nil {
 		t.Skipf("unshare -U -m failed: %v\n%s", err, string(out))
 	}
 }
 
 func TestUnshare_PIDNamespace(t *testing.T) {
-	out, err := exec.Command("unshare", "-U", "-p", "--kill-child", "true").CombinedOutput()
+	out, err := exec.CommandContext(context.Background(), "unshare", "-U", "-p", "--kill-child", "true").CombinedOutput()
 	if err != nil {
 		t.Skipf("unshare -U -p failed: %v\n%s", err, string(out))
 	}
 }
 
 func TestUnshare_UTSNamespace(t *testing.T) {
-	out, err := exec.Command("unshare", "-U", "-u", "true").CombinedOutput()
+	out, err := exec.CommandContext(context.Background(), "unshare", "-U", "-u", "true").CombinedOutput()
 	if err != nil {
 		t.Skipf("unshare -U -u failed: %v\n%s", err, string(out))
 	}
 }
 
 func TestUnshare_IPCNamespace(t *testing.T) {
-	out, err := exec.Command("unshare", "-U", "-i", "true").CombinedOutput()
+	out, err := exec.CommandContext(context.Background(), "unshare", "-U", "-i", "true").CombinedOutput()
 	if err != nil {
 		t.Skipf("unshare -U -i failed: %v\n%s", err, string(out))
 	}
 }
 
 func TestUnshare_AllNamespaces(t *testing.T) {
-	out, err := exec.Command("unshare", "-U", "-m", "-p", "--kill-child", "-u", "-i", "true").CombinedOutput()
+	out, err := exec.CommandContext(context.Background(), "unshare", "-U", "-m", "-p", "--kill-child", "-u", "-i", "true").CombinedOutput()
 	if err != nil {
 		t.Skipf("unshare -U -m -p -u -i failed: %v\n%s", err, string(out))
 	}
@@ -239,7 +239,7 @@ func TestUnshare_WithChroot(t *testing.T) {
 
 	// unshare -U creates a user namespace where we have full capabilities,
 	// including CAP_SYS_CHROOT, so chroot inside should work.
-	out, err := exec.Command("unshare", "-U", "chroot", tmpDir, "/bin/true").CombinedOutput()
+	out, err := exec.CommandContext(context.Background(), "unshare", "-U", "chroot", tmpDir, "/bin/true").CombinedOutput()
 	if err != nil {
 		t.Skipf("unshare -U chroot failed: %v\n%s", err, string(out))
 	}

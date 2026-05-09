@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -94,6 +95,7 @@ func TestDownloadToolchain_SkipsExisting(t *testing.T) {
 }
 
 func TestConfigureDefaultShell(t *testing.T) {
+	//nolint:gosec // test fixtures, not real credentials
 	tests := []struct {
 		name       string
 		prepShells string // initial /etc/shells content ("" means file does not exist)
@@ -358,7 +360,7 @@ func TestSetupMiseRuntimes_MkdirError(t *testing.T) {
 	}
 
 	// Should not panic
-	setupMiseRuntimes(tmp, []string{"nodejs@lts"})
+	setupMiseRuntimes(context.Background(), tmp, []string{"nodejs@lts"})
 
 	// Verify mise.sh was NOT created (because etc is a file, profile.d can't be created)
 	miseShPath := filepath.Join(tmp, "etc", "profile.d", "mise.sh")
@@ -417,8 +419,8 @@ func TestConfigureAutologin(t *testing.T) {
 func TestSetupMiseRuntimes_NoRuntimes(t *testing.T) {
 	tmp := t.TempDir()
 	// Should not panic or error with nil or empty slice
-	setupMiseRuntimes(tmp, nil)
-	setupMiseRuntimes(tmp, []string{})
+	setupMiseRuntimes(context.Background(), tmp, nil)
+	setupMiseRuntimes(context.Background(), tmp, []string{})
 
 	// No files should have been created
 	profilePath := filepath.Join(tmp, "etc", "profile.d", "mise.sh")
@@ -430,7 +432,7 @@ func TestSetupMiseRuntimes_NoRuntimes(t *testing.T) {
 func TestSetupMiseRuntimes_MissingMise(t *testing.T) {
 	tmp := t.TempDir()
 	// No mise binary exists in rootfs
-	setupMiseRuntimes(tmp, []string{"nodejs@lts"})
+	setupMiseRuntimes(context.Background(), tmp, []string{"nodejs@lts"})
 
 	// Should not create profile.d/mise.sh since mise is not found
 	profilePath := filepath.Join(tmp, "etc", "profile.d", "mise.sh")
@@ -452,7 +454,7 @@ func TestSetupMiseRuntimes_InstallFails(t *testing.T) {
 	}
 
 	// Should not panic when install fails
-	setupMiseRuntimes(tmp, []string{"nodejs@lts"})
+	setupMiseRuntimes(context.Background(), tmp, []string{"nodejs@lts"})
 
 	// Verify profile script was still created
 	profilePath := filepath.Join(tmp, "etc", "profile.d", "mise.sh")
@@ -474,7 +476,7 @@ func TestSetupMiseRuntimes_WithMise(t *testing.T) {
 	}
 
 	// Run with a runtime
-	setupMiseRuntimes(tmp, []string{"nodejs@lts"})
+	setupMiseRuntimes(context.Background(), tmp, []string{"nodejs@lts"})
 
 	// Verify profile.d/mise.sh was created
 	profilePath := filepath.Join(tmp, "etc", "profile.d", "mise.sh")

@@ -1,3 +1,6 @@
+// Package server provides an HTTP interface for the AgnostikOS package manager,
+// including a web dashboard, package management API, ISO build triggers, and
+// server-sent events for real-time progress updates.
 package server
 
 import (
@@ -74,7 +77,15 @@ func New(mgr *manager.AgnosticManager) *Server {
 // Listen starts the HTTP server on the given address
 func (s *Server) Listen(addr string) error {
 	log.Printf("Server starting on %s", addr)
-	return http.ListenAndServe(addr, s.mux)
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           s.mux,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	return srv.ListenAndServe()
 }
 
 // Handler returns the HTTP handler (for testing)
@@ -193,7 +204,7 @@ func (s *Server) handleListPackages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func (s *Server) listFromBackend(ctx context.Context, name, query string) ([]packageResult, error) {
@@ -248,24 +259,24 @@ func (s *Server) handlePackagesTable(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if len(packages) == 0 {
-		w.Write([]byte(`<p style="color:#64748b;">No packages found.</p>`))
+		_, _ = w.Write([]byte(`<p style="color:#64748b;">No packages found.</p>`))
 		return
 	}
 
-	w.Write([]byte(`<table><thead><tr><th>Package</th><th>Backend</th><th>Actions</th></tr></thead><tbody>`))
+	_, _ = w.Write([]byte(`<table><thead><tr><th>Package</th><th>Backend</th><th>Actions</th></tr></thead><tbody>`))
 	for _, p := range packages {
 		escapedName := template.HTMLEscapeString(p.Name)
 		escapedBackend := template.HTMLEscapeString(p.Backend)
-		w.Write([]byte(fmt.Sprintf(`<tr>
+		_, _ = fmt.Fprintf(w, `<tr>
 			<td>%s</td>
 			<td><span class="badge badge-%s">%s</span></td>
 			<td class="flex" style="gap:0.5rem;">
 				<button onclick="installPackage('%s','%s')">Install</button>
 				<button class="danger" onclick="removePackage('%s','%s')">Remove</button>
 			</td>
-		</tr>`, escapedName, escapedBackend, escapedBackend, escapedName, escapedBackend, escapedName, escapedBackend)))
+		</tr>`, escapedName, escapedBackend, escapedBackend, escapedName, escapedBackend, escapedName, escapedBackend)
 	}
-	w.Write([]byte(`</tbody></table>`))
+	_, _ = w.Write([]byte(`</tbody></table>`))
 }
 
 // --- Install Package ---
@@ -308,7 +319,7 @@ func (s *Server) handleInstallPackage(w http.ResponseWriter, r *http.Request) {
 	}})
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "package": req.Name})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "package": req.Name})
 }
 
 // --- Remove Package ---
@@ -332,13 +343,39 @@ func (s *Server) handleRemovePackage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "package": name})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "package": name})
 }
 
 // --- Update Packages ---
 
 type updateRequest struct {
 	Backend string `json:"backend"`
+}
+
+// updateBackend calls UpdateAll on the named backend.
+func (s *Server) updateBackend(ctx context.Context, name string) error {
+	svc, ok := s.mgr.Backends[name]
+	if !ok {
+		return fmt.Errorf("backend '%s' not found", name)
+	}
+
+	s.broadcast(SSEEvent{Event: "update:start", Data: map[string]string{
+		"backend": name,
+	}})
+
+	if err := svc.UpdateAll(); err != nil {
+		s.broadcast(SSEEvent{Event: "update:error", Data: map[string]string{
+			"backend": name,
+			"error":   err.Error(),
+		}})
+		return err
+	}
+
+	s.broadcast(SSEEvent{Event: "update:done", Data: map[string]string{
+		"backend": name,
+	}})
+
+	return nil
 }
 
 func (s *Server) handleUpdatePackages(w http.ResponseWriter, r *http.Request) {
@@ -367,22 +404,7 @@ func (s *Server) handleUpdatePackages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
-}
-
-func (s *Server) updateBackend(ctx context.Context, name string) error {
-	svc, ok := s.mgr.Backends[name]
-	if !ok {
-		return fmt.Errorf("backend '%s' not found", name)
-	}
-
-	s.broadcast(SSEEvent{Event: "update:start", Data: map[string]string{"backend": name}})
-	err := svc.UpdateAll()
-	if err != nil {
-		return fmt.Errorf("backend %s update failed: %w", name, err)
-	}
-	s.broadcast(SSEEvent{Event: "update:done", Data: map[string]string{"backend": name}})
-	return nil
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 // --- ISO Status ---
@@ -406,7 +428,7 @@ func (s *Server) handleISOStatus(w http.ResponseWriter, r *http.Request) {
 	s.progressMu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(status)
+	_ = json.NewEncoder(w).Encode(status)
 }
 
 // --- ISO Build ---
@@ -436,7 +458,7 @@ func (s *Server) handleISOStartBuild(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "building"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "building"})
 }
 
 // --- SSE ---
@@ -473,7 +495,7 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			data, _ := json.Marshal(evt.Data)
-			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", evt.Event, data)
+			_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", evt.Event, data)
 			flusher.Flush()
 		}
 	}

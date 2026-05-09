@@ -334,8 +334,8 @@ func TestCreateInitramfs_CpioError(t *testing.T) {
 func TestRunGrubMkrescue_NotFound(t *testing.T) {
 	// Temporarily remove grub-mkrescue from PATH
 	origPath := os.Getenv("PATH")
-	t.Cleanup(func() { os.Setenv("PATH", origPath) })
-	os.Setenv("PATH", "/dev/null")
+	t.Cleanup(func() { _ = os.Setenv("PATH", origPath) })
+	_ = os.Setenv("PATH", "/dev/null")
 
 	err := runGrubMkrescue("/tmp", ISOConfig{})
 	if err == nil {

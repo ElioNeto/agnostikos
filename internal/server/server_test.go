@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -70,8 +71,8 @@ func setupTestServer(t *testing.T) *Server {
 	t.Helper()
 
 	// Set a known auth token
-	os.Setenv("AGNOSTIKOS_TOKEN", "test-token-123")
-	t.Cleanup(func() { os.Unsetenv("AGNOSTIKOS_TOKEN") })
+	_ = os.Setenv("AGNOSTIKOS_TOKEN", "test-token-123")
+	t.Cleanup(func() { _ = os.Unsetenv("AGNOSTIKOS_TOKEN") })
 
 	mgr := manager.NewAgnosticManager()
 
@@ -114,16 +115,32 @@ func authHeader() (string, string) {
 	return "X-Auth-Token", "test-token-123"
 }
 
+// doGet is a test helper that performs a GET request with context.
+func doGet(t *testing.T, url string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
+	if err != nil {
+		t.Fatalf("failed to create GET request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("failed to GET %s: %v", url, err)
+	}
+	return resp
+}
+
+// closeResp is a test helper that closes a response body, ignoring errors.
+func closeResp(resp *http.Response) {
+	_ = resp.Body.Close()
+}
+
 func TestDashboardRoute(t *testing.T) {
 	s := setupTestServer(t)
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/")
-	if err != nil {
-		t.Fatalf("failed to GET /: %v", err)
-	}
-	defer resp.Body.Close()
+	resp := doGet(t, ts.URL+"/")
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected status 200, got %d", resp.StatusCode)
@@ -144,11 +161,8 @@ func TestDashboardRoute_Unauthenticated(t *testing.T) {
 	defer ts.Close()
 
 	// Dashboard route does not require auth
-	resp, err := http.Get(ts.URL + "/")
-	if err != nil {
-		t.Fatalf("failed to GET /: %v", err)
-	}
-	defer resp.Body.Close()
+	resp := doGet(t, ts.URL+"/")
+	defer closeResp(resp)
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected status 200 for unauthenticated dashboard, got %d", resp.StatusCode)
 	}
@@ -159,11 +173,8 @@ func TestListPackages_NoAuth_Returns401(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/packages")
-	if err != nil {
-		t.Fatalf("failed to GET /api/packages: %v", err)
-	}
-	defer resp.Body.Close()
+	resp := doGet(t, ts.URL+"/api/packages")
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("expected 401 without auth, got %d", resp.StatusCode)
@@ -175,13 +186,13 @@ func TestListPackages_AllBackends(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	req, _ := http.NewRequest("GET", ts.URL+"/api/packages", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", ts.URL+"/api/packages", nil)
 	req.Header.Set(authHeader())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("failed to GET /api/packages: %v", err)
 	}
-	defer resp.Body.Close()
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
@@ -206,20 +217,20 @@ func TestSearchPackages(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	req, _ := http.NewRequest("GET", ts.URL+"/api/packages?q=firefox", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", ts.URL+"/api/packages?q=firefox", nil)
 	req.Header.Set(authHeader())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("failed to search: %v", err)
 	}
-	defer resp.Body.Close()
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 
 	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
+	_ = json.NewDecoder(resp.Body).Decode(&result)
 
 	if result["query"] != "firefox" {
 		t.Errorf("expected query 'firefox', got %v", result["query"])
@@ -231,20 +242,20 @@ func TestListPackages_ByBackend(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	req, _ := http.NewRequest("GET", ts.URL+"/api/packages?backend=nix", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", ts.URL+"/api/packages?backend=nix", nil)
 	req.Header.Set(authHeader())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("failed to list nix packages: %v", err)
 	}
-	defer resp.Body.Close()
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 
 	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
+	_ = json.NewDecoder(resp.Body).Decode(&result)
 
 	pkgs, _ := result["packages"].([]interface{})
 	for _, p := range pkgs {
@@ -261,21 +272,21 @@ func TestInstallPackage_Success(t *testing.T) {
 	defer ts.Close()
 
 	body := strings.NewReader(`{"name":"firefox","backend":"pacman"}`)
-	req, _ := http.NewRequest("POST", ts.URL+"/api/packages/install", body)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", ts.URL+"/api/packages/install", body)
 	req.Header.Set(authHeader())
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("failed to install: %v", err)
 	}
-	defer resp.Body.Close()
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 
 	var result map[string]string
-	json.NewDecoder(resp.Body).Decode(&result)
+	_ = json.NewDecoder(resp.Body).Decode(&result)
 	if result["status"] != "ok" {
 		t.Errorf("expected status 'ok', got %s", result["status"])
 	}
@@ -300,7 +311,7 @@ func TestInstallPackage_MissingFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req, _ := http.NewRequest("POST", ts.URL+"/api/packages/install",
+			req, _ := http.NewRequestWithContext(context.Background(), "POST", ts.URL+"/api/packages/install",
 				strings.NewReader(tt.body))
 			req.Header.Set(authHeader())
 			req.Header.Set("Content-Type", "application/json")
@@ -308,7 +319,7 @@ func TestInstallPackage_MissingFields(t *testing.T) {
 			if err != nil {
 				t.Fatalf("request failed: %v", err)
 			}
-			defer resp.Body.Close()
+			defer closeResp(resp)
 
 			if resp.StatusCode != tt.wantStatus {
 				t.Errorf("expected status %d, got %d", tt.wantStatus, resp.StatusCode)
@@ -322,13 +333,13 @@ func TestRemovePackage_Success(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	req, _ := http.NewRequest("DELETE", ts.URL+"/api/packages/firefox?backend=pacman", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "DELETE", ts.URL+"/api/packages/firefox?backend=pacman", nil)
 	req.Header.Set(authHeader())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("failed to remove: %v", err)
 	}
-	defer resp.Body.Close()
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
@@ -341,13 +352,13 @@ func TestRemovePackage_DefaultBackend(t *testing.T) {
 	defer ts.Close()
 
 	// Without ?backend=, defaults to pacman
-	req, _ := http.NewRequest("DELETE", ts.URL+"/api/packages/firefox", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "DELETE", ts.URL+"/api/packages/firefox", nil)
 	req.Header.Set(authHeader())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("failed to remove: %v", err)
 	}
-	defer resp.Body.Close()
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
@@ -360,14 +371,14 @@ func TestUpdatePackages_NoBackend(t *testing.T) {
 	defer ts.Close()
 
 	body := strings.NewReader(`{"backend":""}`)
-	req, _ := http.NewRequest("POST", ts.URL+"/api/packages/update", body)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", ts.URL+"/api/packages/update", body)
 	req.Header.Set(authHeader())
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("failed to update: %v", err)
 	}
-	defer resp.Body.Close()
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
@@ -380,14 +391,14 @@ func TestUpdatePackages_SpecificBackend(t *testing.T) {
 	defer ts.Close()
 
 	body := strings.NewReader(`{"backend":"pacman"}`)
-	req, _ := http.NewRequest("POST", ts.URL+"/api/packages/update", body)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", ts.URL+"/api/packages/update", body)
 	req.Header.Set(authHeader())
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("failed to update: %v", err)
 	}
-	defer resp.Body.Close()
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
@@ -399,20 +410,20 @@ func TestISOStatus_Idle(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	req, _ := http.NewRequest("GET", ts.URL+"/api/iso/status", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", ts.URL+"/api/iso/status", nil)
 	req.Header.Set(authHeader())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("failed to get ISO status: %v", err)
 	}
-	defer resp.Body.Close()
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 
 	var status isoStatus
-	json.NewDecoder(resp.Body).Decode(&status)
+	_ = json.NewDecoder(resp.Body).Decode(&status)
 
 	if status.Building {
 		t.Error("expected not building initially")
@@ -427,20 +438,20 @@ func TestISOStartBuild(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	req, _ := http.NewRequest("POST", ts.URL+"/api/iso/build", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", ts.URL+"/api/iso/build", nil)
 	req.Header.Set(authHeader())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("failed to start ISO build: %v", err)
 	}
-	defer resp.Body.Close()
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 
 	var result map[string]string
-	json.NewDecoder(resp.Body).Decode(&result)
+	_ = json.NewDecoder(resp.Body).Decode(&result)
 	if result["status"] != "building" {
 		t.Errorf("expected status 'building', got '%s'", result["status"])
 	}
@@ -452,19 +463,19 @@ func TestISOStartBuild_AlreadyBuilding(t *testing.T) {
 	defer ts.Close()
 
 	// Start first build
-	req1, _ := http.NewRequest("POST", ts.URL+"/api/iso/build", nil)
+	req1, _ := http.NewRequestWithContext(context.Background(), "POST", ts.URL+"/api/iso/build", nil)
 	req1.Header.Set(authHeader())
 	resp1, _ := http.DefaultClient.Do(req1)
-	resp1.Body.Close()
+	_ = resp1.Body.Close()
 
 	// Try second build (should conflict)
-	req2, _ := http.NewRequest("POST", ts.URL+"/api/iso/build", nil)
+	req2, _ := http.NewRequestWithContext(context.Background(), "POST", ts.URL+"/api/iso/build", nil)
 	req2.Header.Set(authHeader())
 	resp2, err := http.DefaultClient.Do(req2)
 	if err != nil {
 		t.Fatalf("second request failed: %v", err)
 	}
-	defer resp2.Body.Close()
+	defer closeResp(resp2)
 
 	if resp2.StatusCode != http.StatusConflict {
 		t.Errorf("expected 409 Conflict, got %d", resp2.StatusCode)
@@ -476,13 +487,13 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	req, _ := http.NewRequest("GET", ts.URL+"/api/packages", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", ts.URL+"/api/packages", nil)
 	req.Header.Set("X-Auth-Token", "wrong-token")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("expected 401 for invalid token, got %d", resp.StatusCode)
@@ -494,11 +505,8 @@ func TestAuthMiddleware_MissingToken(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/packages")
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-	defer resp.Body.Close()
+	resp := doGet(t, ts.URL+"/api/packages")
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("expected 401 for missing token, got %d", resp.StatusCode)
@@ -510,13 +518,13 @@ func TestPackagesTableRoute(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	req, _ := http.NewRequest("GET", ts.URL+"/api/packages/table", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", ts.URL+"/api/packages/table", nil)
 	req.Header.Set(authHeader())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("failed to GET /api/packages/table: %v", err)
 	}
-	defer resp.Body.Close()
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
@@ -533,11 +541,8 @@ func TestPackagesPageRoute(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/packages")
-	if err != nil {
-		t.Fatalf("failed to GET /packages: %v", err)
-	}
-	defer resp.Body.Close()
+	resp := doGet(t, ts.URL+"/packages")
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
@@ -554,11 +559,8 @@ func TestISOPageRoute(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/iso")
-	if err != nil {
-		t.Fatalf("failed to GET /iso: %v", err)
-	}
-	defer resp.Body.Close()
+	resp := doGet(t, ts.URL+"/iso")
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
@@ -575,11 +577,8 @@ func TestSSEEndpoint_RequiresAuth(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/events")
-	if err != nil {
-		t.Fatalf("failed to GET /events: %v", err)
-	}
-	defer resp.Body.Close()
+	resp := doGet(t, ts.URL+"/events")
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("expected 401 for SSE without auth, got %d", resp.StatusCode)
@@ -591,7 +590,7 @@ func TestSSEEndpoint_Authenticated(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	req, _ := http.NewRequest("GET", ts.URL+"/events", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", ts.URL+"/events", nil)
 	req.Header.Set(authHeader())
 
 	// Use a transport with short timeout to avoid hanging on SSE
@@ -604,7 +603,7 @@ func TestSSEEndpoint_Authenticated(t *testing.T) {
 		t.Logf("SSE connection timed out as expected: %v", err)
 		return
 	}
-	defer resp.Body.Close()
+	defer closeResp(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)

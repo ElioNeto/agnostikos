@@ -68,7 +68,7 @@ func (m *MockPackageService) List() ([]string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var result []string
+	result := make([]string, 0, len(m.installed))
 	for name, version := range m.installed {
 		result = append(result, name+" "+version)
 	}
