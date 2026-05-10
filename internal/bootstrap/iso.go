@@ -121,7 +121,7 @@ func GenerateISO(cfg ISOConfig) error {
 set default=0
 
 menuentry "%s %s" {
-    linux /boot/vmlinuz root=/dev/ram0 console=tty0 console=ttyS0,115200 quiet loglevel=3
+    linux /boot/vmlinuz root=/dev/ram0 console=tty0 console=ttyS0,115200 quiet loglevel=3 nokaslr
     initrd /boot/initramfs.img
 }
 `, cfg.Name, cfg.Version)
