@@ -225,7 +225,7 @@ func BuildGLibc(ctx context.Context, cfg ToolchainConfig) error {
 	target := toolchainTarget(cfg)
 	jobs := toolchainNumCPUs(cfg)
 	srcDir := sourcesDir(cfg.TargetDir)
-	pkg := "glibc-2.40"
+	pkg := "glibc-2.41"
 	tarball := pkg + ".tar.xz"
 	tarballPath := filepath.Join(srcDir, tarball)
 	srcPath := filepath.Join(srcDir, pkg)
@@ -255,6 +255,7 @@ func BuildGLibc(ctx context.Context, cfg ToolchainConfig) error {
 		"--host=" + target,
 		"--disable-nls",
 		"--enable-kernel=4.19",
+		"--disable-werror",
 	)
 	configureCmd.Dir = buildDir
 	configureCmd.Stdout, configureCmd.Stderr = os.Stdout, os.Stderr

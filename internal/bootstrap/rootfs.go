@@ -41,7 +41,7 @@ type ToolchainPackage struct {
 var DefaultToolchain = []ToolchainPackage{
 	{Name: "binutils-2.42", URL: "https://sourceware.org/pub/binutils/releases/binutils-2.42.tar.xz", SHA256: "verify_at_runtime", SHA512: "155f3ba14cd220102f4f29a4f1e5cfee3c48aa03b74603460d05afb73c70d6657a9d87eee6eb88bf13203fe6f31177a5c9addc04384e956e7da8069c8ecd20a6"},
 	{Name: "gcc-14.3.0", URL: "https://ftp.gnu.org/gnu/gcc/gcc-14.3.0/gcc-14.3.0.tar.xz", SHA256: "e0dc77297625631ac8e50fa92fffefe899a4eb702592da5c32ef04e2293aca3a"},
-	{Name: "glibc-2.40", URL: "https://ftp.gnu.org/gnu/glibc/glibc-2.40.tar.xz", SHA256: "19a890175e9263d748f627993de6f4b1af9cd21e03f080e4bfb3a1fac10205a2"},
+	{Name: "glibc-2.41", URL: "https://ftp.gnu.org/gnu/glibc/glibc-2.41.tar.xz", SHA256: "a5a26b22f545d6b7d7b3dd828e11e428f24f4fac43c934fb071b6a7d0828e901"},
 }
 
 // FHSDirectories é a árvore de diretórios do Filesystem Hierarchy Standard
