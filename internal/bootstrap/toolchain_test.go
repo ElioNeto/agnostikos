@@ -381,10 +381,10 @@ func TestBuildGLibc_AlreadyBuilt(t *testing.T) {
 	if err := os.MkdirAll(srcDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	writeFakeTarballPlain(t, filepath.Join(srcDir, "glibc-2.39.tar.xz"))
+	writeFakeTarballPlain(t, filepath.Join(srcDir, "glibc-2.40.tar.xz"))
 
 	// Create src dir (already extracted)
-	srcPath := filepath.Join(srcDir, "glibc-2.39")
+	srcPath := filepath.Join(srcDir, "glibc-2.40")
 	if err := os.MkdirAll(srcPath, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -775,10 +775,10 @@ func TestBootstrapAll_SkipToolchainFalseRunsBuildSteps(t *testing.T) {
 	// Create fake tarballs so the "not found" check passes
 	writeFakeTarballPlain(t, filepath.Join(srcDir, "binutils-2.42.tar.xz"))
 	writeFakeTarballPlain(t, filepath.Join(srcDir, "gcc-14.1.0.tar.xz"))
-	writeFakeTarballPlain(t, filepath.Join(srcDir, "glibc-2.39.tar.xz"))
+	writeFakeTarballPlain(t, filepath.Join(srcDir, "glibc-2.40.tar.xz"))
 
 	// Create extracted source dirs so extraction is skipped
-	for _, pkg := range []string{"binutils-2.42", "gcc-14.1.0", "glibc-2.39"} {
+	for _, pkg := range []string{"binutils-2.42", "gcc-14.1.0", "glibc-2.40"} {
 		pkgDir := filepath.Join(srcDir, pkg)
 		if err := os.MkdirAll(pkgDir, 0755); err != nil {
 			t.Fatal(err)
