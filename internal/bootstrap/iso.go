@@ -20,6 +20,7 @@ type ISOConfig struct {
 	UEFI          bool
 	BootLabel     string
 	TestMode      bool // quando true, gera initramfs mínimo sem busybox para teste
+	Progress      chan<- string // canal opcional para notificar progresso da geração da ISO
 }
 
 func findVmlinuz(rootfs, kernelVersion string) (string, error) {
@@ -48,10 +49,19 @@ func findVmlinuz(rootfs, kernelVersion string) (string, error) {
 	return "", fmt.Errorf("no kernel found in %s — tried vmlinuz-* and Image-*; run 'make bootstrap' first", bootDir)
 }
 
+// emitISOProgress envia uma mensagem de progresso para o canal, se configurado.
+func emitISOProgress(cfg ISOConfig, msg string) {
+	if cfg.Progress != nil {
+		cfg.Progress <- msg
+	}
+}
+
 func GenerateISO(cfg ISOConfig) error {
 	if cfg.RootFS == "" || cfg.Output == "" {
 		return errors.New("RootFS and Output are required")
 	}
+
+	emitISOProgress(cfg, "=== Generating ISO ===")
 
 	isoTmpBase := tmpDir()
 	if err := os.MkdirAll(isoTmpBase, 0755); err != nil {
@@ -222,5 +232,7 @@ func runGrubMkrescue(isoDir string, cfg ISOConfig) error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("grub-mkrescue failed: %w", err)
 	}
+
+	emitISOProgress(cfg, fmt.Sprintf("ISO generated: %s", cfg.Output))
 	return nil
 }

@@ -22,6 +22,7 @@ const (
 	SearchView
 	PackageDetailView
 	ListView
+	BuildConfigView
 	BuildView
 )
 
@@ -45,6 +46,10 @@ var (
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#888888")).
 			Italic(true)
+
+	stepStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#4ECDC4")).
+			Bold(true)
 )
 
 // searchResultsMsg carries async search results back to the update loop.
@@ -66,9 +71,16 @@ type listResultsMsg struct {
 	err     error
 }
 
+// defaultISOPath is the fallback path used when no OutputISO is configured.
+const defaultISOPath = "/mnt/data/agnostikOS/build/agnostikos-latest.iso"
+
+// progressMsg carries a progress update from the build pipeline.
+type progressMsg string
+
 // buildCompletedMsg signals that a build operation has finished.
 type buildCompletedMsg struct {
 	err error
+	iso string // caminho da ISO gerada (vazio se erro)
 }
 
 // Model is the main Bubble Tea model implementing tea.Model.
@@ -94,8 +106,20 @@ type Model struct {
 	listErr     error
 
 	// Build view
-	buildErr  error
-	buildDone bool
+	buildErr         error
+	buildDone        bool
+	buildOutputISO   string            // caminho da ISO gerada com sucesso
+	buildProgress    []string          // lista de mensagens de progresso
+	buildMaxSteps    int               // total de steps (default 14)
+	buildCurrentStep int               // step atual (0-based)
+	progressChan     chan string       // canal para streaming de progresso
+	buildCfg         manager.BuildConfig // config usada no build atual
+
+	// Build config form
+	buildConfig BuildConfigViewModel
+
+	// Build cancellation
+	cancelBuild context.CancelFunc
 
 	// Async operations
 	spinner   spinner.Model
@@ -131,6 +155,7 @@ func InitialModel(mgr *manager.AgnosticManager) Model {
 		searchInput: ti,
 		spinner:     s,
 		listCursor:  0,
+		buildConfig: InitialBuildConfigModel(),
 	}
 }
 
@@ -165,6 +190,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handlePackageDetailKey(msg)
 		case ListView:
 			return m.handleListViewKey(msg)
+		case BuildConfigView:
+			return m.handleBuildConfigViewKey(msg)
 		case BuildView:
 			return m.handleBuildViewKey(msg)
 		}
@@ -206,13 +233,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case progressMsg:
+		m.buildProgress = append(m.buildProgress, string(msg))
+		m.buildCurrentStep = len(m.buildProgress)
+		// Chain to read next progress message
+		return m, m.readProgressCmd()
+
 	case buildCompletedMsg:
 		m.loading = false
 		m.buildDone = true
+		m.progressChan = nil
+		m.cancelBuild = nil
 		if msg.err != nil {
 			m.buildErr = msg.err
+			m.buildOutputISO = ""
 		} else {
 			m.buildErr = nil
+			m.buildOutputISO = msg.iso
 		}
 		return m, nil
 
@@ -255,11 +292,9 @@ func (m Model) handleBackendListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.listCursor = 0
 		return m, m.listCmd()
 	case "b":
-		m.viewState = BuildView
-		m.loading = true
-		m.buildErr = nil
-		m.buildDone = false
-		return m, m.buildCmd()
+		m.viewState = BuildConfigView
+		m.buildConfig.reset()
+		return m, nil
 	}
 	return m, nil
 }
@@ -372,19 +407,6 @@ func (m Model) listCmd() tea.Cmd {
 	}
 }
 
-// buildCmd returns a tea.Cmd that runs the full ISO build asynchronously.
-func (m Model) buildCmd() tea.Cmd {
-	return func() tea.Msg {
-		cfg := manager.BuildConfig{
-			Name:          "AgnostikOS",
-			Version:       "0.1.0",
-			KernelVersion: "6.6",
-		}
-		err := m.manager.Build(context.Background(), cfg)
-		return buildCompletedMsg{err: err}
-	}
-}
-
 // handleListViewKey processes key presses on the list view screen.
 func (m Model) handleListViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -406,14 +428,106 @@ func (m Model) handleListViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleBuildConfigViewKey processes key presses on the build configuration screen.
+func (m Model) handleBuildConfigViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.buildConfig.errMsg = ""
+		m.viewState = BackendListView
+		return m, nil
+	case "enter":
+		// Validate required fields before starting the build
+		cfg := m.buildConfig.toBuildConfig()
+		if cfg.KernelVersion == "" || cfg.Arch == "" {
+			m.buildConfig.errMsg = "Kernel Version and Architecture are required"
+			return m, nil
+		}
+		m.buildConfig.errMsg = ""
+
+		m.viewState = BuildView
+		m.loading = false
+		m.buildErr = nil
+		m.buildDone = false
+		m.buildOutputISO = ""
+		m.buildProgress = nil
+		m.buildCurrentStep = 0
+		m.buildMaxSteps = 14
+		m.buildCfg = cfg
+
+		// Create buffered progress channel
+		m.progressChan = make(chan string, 100)
+
+		// Create cancellable context for the build
+		ctx, cancel := context.WithCancel(context.Background())
+		m.cancelBuild = cancel
+
+		// Start the build in a goroutine
+		go func() {
+			err := m.manager.Build(ctx, cfg, m.progressChan)
+			// Send final status before closing
+			if err != nil {
+				m.progressChan <- fmt.Sprintf("ERROR: %s", err)
+			} else {
+				m.progressChan <- "DONE"
+			}
+			close(m.progressChan)
+		}()
+
+		// Return a cmd to read the first progress message
+		return m, m.readProgressCmd()
+	default:
+		var cmd tea.Cmd
+		m.buildConfig, cmd = m.buildConfig.Update(msg)
+		return m, cmd
+	}
+}
+
+// readProgressCmd returns a tea.Cmd that reads the next message from the
+// progress channel and returns it as a progressMsg or buildCompletedMsg.
+func (m Model) readProgressCmd() tea.Cmd {
+	return func() tea.Msg {
+		if m.progressChan == nil {
+			return buildCompletedMsg{err: fmt.Errorf("build cancelled"), iso: ""}
+		}
+		msg, ok := <-m.progressChan
+		if !ok {
+			// Channel closed unexpectedly (should not happen with sentinel approach)
+			return buildCompletedMsg{err: fmt.Errorf("build cancelled"), iso: ""}
+		}
+		if msg == "DONE" {
+			isoPath := m.buildCfg.OutputISO
+			if isoPath == "" {
+				isoPath = defaultISOPath
+			}
+			return buildCompletedMsg{err: nil, iso: isoPath}
+		}
+		if strings.HasPrefix(msg, "ERROR: ") {
+			return buildCompletedMsg{err: fmt.Errorf("%s", strings.TrimPrefix(msg, "ERROR: ")), iso: ""}
+		}
+		return progressMsg(msg)
+	}
+}
+
 // handleBuildViewKey processes key presses on the build view screen.
 func (m Model) handleBuildViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
+		// Cancel the build context if it's still running
+		if m.cancelBuild != nil {
+			m.cancelBuild()
+			m.cancelBuild = nil
+		}
 		m.viewState = BackendListView
 		m.loading = false
 		m.buildErr = nil
 		m.buildDone = false
+		m.buildProgress = nil
+		m.buildCurrentStep = 0
+		m.buildOutputISO = ""
+		// Close progress channel if build is still running
+		if m.progressChan != nil {
+			m.progressChan = nil
+		}
 	}
 	return m, nil
 }
@@ -429,6 +543,8 @@ func (m Model) View() string {
 		return m.packageDetailView()
 	case ListView:
 		return m.listView()
+	case BuildConfigView:
+		return m.buildConfig.View()
 	case BuildView:
 		return m.buildView()
 	default:
@@ -555,16 +671,62 @@ func (m Model) buildView() string {
 	b.WriteString(titleStyle.Render("Build AgnosticOS ISO"))
 	b.WriteString("\n\n")
 
-	switch {
-	case m.loading:
-		fmt.Fprintf(&b, "  %s Building... This may take a while.\n", m.spinner.View())
-	case m.buildErr != nil:
-		b.WriteString(errorStyle.Render(fmt.Sprintf("\nBuild failed: %s\n", m.buildErr)))
-	case m.buildDone:
-		b.WriteString(successStyle.Render("\nBuild completed successfully!\n"))
+	if !m.buildDone {
+		// Show streaming progress
+		total := m.buildMaxSteps
+		if total <= 0 {
+			total = 14
+		}
+		current := m.buildCurrentStep
+		if current > total {
+			current = total
+		}
+
+		// Progress bar: [████████░░] 7/14
+		barWidth := 20
+		filled := current * barWidth / total
+		if filled > barWidth {
+			filled = barWidth
+		}
+		bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
+		fmt.Fprintf(&b, "  [%s] %d/%d\n\n", bar, current, total)
+
+		// Show current step description
+		if current > 0 && current <= len(m.buildProgress) {
+			step := m.buildProgress[current-1]
+			b.WriteString("  " + stepStyle.Render(step) + "\n")
+		}
+
+		// Show last few progress messages
+		start := 0
+		if len(m.buildProgress) > 5 {
+			start = len(m.buildProgress) - 5
+		}
+		for i := start; i < len(m.buildProgress); i++ {
+			if i == current-1 {
+				continue // already shown above
+			}
+			fmt.Fprintf(&b, "  • %s\n", m.buildProgress[i])
+		}
+
+		b.WriteString("\n")
+		b.WriteString(helpStyle.Render("Building... esc: cancel • q: quit"))
+	} else if m.buildErr != nil {
+		b.WriteString(errorStyle.Render(fmt.Sprintf("Build failed:\n\n  %s\n", m.buildErr)))
+		// Show progress messages even on error for context
+		if len(m.buildProgress) > 0 {
+			b.WriteString("\nProgress log:\n")
+			for _, p := range m.buildProgress {
+				fmt.Fprintf(&b, "  • %s\n", p)
+			}
+		}
+		b.WriteString("\n")
+		b.WriteString(helpStyle.Render("esc: back • q: quit"))
+	} else {
+		b.WriteString(successStyle.Render(fmt.Sprintf("Build completed successfully!\n\nISO generated at:\n  %s\n", m.buildOutputISO)))
+		b.WriteString("\n")
+		b.WriteString(helpStyle.Render("esc: back • q: quit"))
 	}
 
-	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("esc: back • q: quit"))
 	return b.String()
 }

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -712,27 +713,262 @@ func TestListView_EscapeToBackendList(t *testing.T) {
 	}
 }
 
-// --- Build view tests ---
+// --- BuildConfigView tests ---
 
-func TestBuildTransition_FromBackendListView(t *testing.T) {
+func TestBuildConfigView_TransitionFromBackendList(t *testing.T) {
 	m := newTestModel()
 
 	m = sendKey(m, "b")
 
-	if m.viewState != BuildView {
-		t.Errorf("expected BuildView, got %v", m.viewState)
+	if m.viewState != BuildConfigView {
+		t.Errorf("expected BuildConfigView, got %v", m.viewState)
 	}
-	if !m.loading {
-		t.Error("expected loading to be true when entering build view")
+}
+
+func TestBuildConfigView_RendersForm(t *testing.T) {
+	m := newTestModel()
+	m.viewState = BuildConfigView
+
+	view := m.View()
+	if view == "" {
+		t.Error("expected non-empty build config view")
+	}
+	if !strings.Contains(view, "Target Directory") {
+		t.Error("expected Target Directory field in form")
+	}
+	if !strings.Contains(view, "Kernel Version") {
+		t.Error("expected Kernel Version field in form")
+	}
+	if !strings.Contains(view, "Skip Toolchain") {
+		t.Error("expected Skip Toolchain toggle in form")
+	}
+	if !strings.Contains(view, "Skip Kernel") {
+		t.Error("expected Skip Kernel toggle in form")
+	}
+}
+
+func TestBuildConfigView_TabNavigation(t *testing.T) {
+	m := newTestModel()
+	m.viewState = BuildConfigView
+
+	// Initial field should be 0
+	if m.buildConfig.currentField != 0 {
+		t.Errorf("expected initial currentField 0, got %d", m.buildConfig.currentField)
+	}
+
+	// Tab to next field
+	msg := tea.KeyMsg{Type: tea.KeyTab}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	if m2.buildConfig.currentField != 1 {
+		t.Errorf("expected currentField 1 after Tab, got %d", m2.buildConfig.currentField)
+	}
+
+	// Tab multiple times to wrap around
+	for i := 0; i < len(m2.buildConfig.fields)-1; i++ {
+		updated, _ = m2.Update(tea.KeyMsg{Type: tea.KeyTab})
+		m2 = updated.(Model)
+	}
+	// Should have wrapped to field 0 again
+	if m2.buildConfig.currentField != 0 {
+		t.Errorf("expected currentField 0 after wrap-around, got %d", m2.buildConfig.currentField)
+	}
+
+	// Verify Tab advances field correctly
+	updated, _ = m2.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m3 := updated.(Model)
+	if m3.buildConfig.currentField != 1 {
+		t.Errorf("expected currentField 1 after Tab, got %d", m3.buildConfig.currentField)
+	}
+}
+
+func TestBuildConfigView_EscapeToBackendList(t *testing.T) {
+	m := newTestModel()
+	m.viewState = BuildConfigView
+
+	m = sendEsc(m)
+
+	if m.viewState != BackendListView {
+		t.Errorf("expected BackendListView after esc, got %v", m.viewState)
+	}
+}
+
+func TestBuildConfigView_EnterStartsBuild(t *testing.T) {
+	m := newTestModel()
+	m.viewState = BuildConfigView
+
+	// Set required fields
+	m.buildConfig.fields[1].input.SetValue("6.6")
+	m.buildConfig.fields[2].input.SetValue("amd64")
+
+	// Press Enter to start build
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m2 := updated.(Model)
+
+	if m2.viewState != BuildView {
+		t.Errorf("expected BuildView after Enter, got %v", m2.viewState)
+	}
+	if m2.buildCfg.KernelVersion != "6.6" {
+		t.Errorf("expected KernelVersion 6.6, got %q", m2.buildCfg.KernelVersion)
+	}
+	if m2.buildCfg.Arch != "amd64" {
+		t.Errorf("expected Arch amd64, got %q", m2.buildCfg.Arch)
+	}
+	if m2.progressChan == nil {
+		t.Error("expected progressChan to be initialized")
+	}
+	if cmd == nil {
+		t.Error("expected a command to read progress")
+	}
+}
+
+func TestBuildConfigView_EnterRejectsMissingFields(t *testing.T) {
+	m := newTestModel()
+	m.viewState = BuildConfigView
+
+	// KernelVersion and Arch are empty — clear them
+	m.buildConfig.fields[1].input.SetValue("")
+	m.buildConfig.fields[2].input.SetValue("")
+
+	// Press Enter — should fail validation
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m2 := updated.(Model)
+
+	if m2.viewState != BuildConfigView {
+		t.Errorf("expected BuildConfigView (stay on form), got %v", m2.viewState)
+	}
+	if m2.buildConfig.errMsg == "" {
+		t.Error("expected error message on form, got empty")
+	}
+	if cmd != nil {
+		t.Error("expected nil command when validation fails")
+	}
+
+	// Set only one field — should still fail
+	m3 := newTestModel()
+	m3.viewState = BuildConfigView
+	m3.buildConfig.fields[1].input.SetValue("6.6")
+	m3.buildConfig.fields[2].input.SetValue("")
+
+	updated, cmd = m3.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m4 := updated.(Model)
+
+	if m4.viewState != BuildConfigView {
+		t.Errorf("expected BuildConfigView when Arch is missing, got %v", m4.viewState)
+	}
+	if m4.buildConfig.errMsg == "" {
+		t.Error("expected error message when Arch is missing")
+	}
+}
+
+func TestBuildConfigView_ToggleFields(t *testing.T) {
+	m := newTestModel()
+	m.viewState = BuildConfigView
+
+	// Navigate to Skip Toolchain toggle (index 6)
+	for i := 0; i < 6; i++ {
+		msg := tea.KeyMsg{Type: tea.KeyTab}
+		updated, _ := m.Update(msg)
+		m = updated.(Model)
+	}
+
+	if m.buildConfig.currentField != 6 {
+		t.Fatalf("expected currentField 6 (Skip Toolchain), got %d", m.buildConfig.currentField)
+	}
+
+	// Toggle with space
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	if !m2.buildConfig.fields[6].toggleOn {
+		t.Error("expected Skip Toolchain to be toggled on")
+	}
+
+	// Toggle again
+	updated, _ = m2.Update(msg)
+	m3 := updated.(Model)
+
+	if m3.buildConfig.fields[6].toggleOn {
+		t.Error("expected Skip Toolchain to be toggled off")
+	}
+}
+
+func TestBuildConfigView_toBuildConfig(t *testing.T) {
+	b := InitialBuildConfigModel()
+	b.fields[0].input.SetValue("/custom/target")
+	b.fields[1].input.SetValue("6.8")
+	b.fields[2].input.SetValue("arm64")
+	b.fields[6].toggleOn = true
+
+	cfg := b.toBuildConfig()
+
+	if cfg.TargetDir != "/custom/target" {
+		t.Errorf("expected TargetDir /custom/target, got %q", cfg.TargetDir)
+	}
+	if cfg.KernelVersion != "6.8" {
+		t.Errorf("expected KernelVersion 6.8, got %q", cfg.KernelVersion)
+	}
+	if cfg.Arch != "arm64" {
+		t.Errorf("expected Arch arm64, got %q", cfg.Arch)
+	}
+	if !cfg.SkipToolchain {
+		t.Error("expected SkipToolchain to be true")
+	}
+	if cfg.Name != "AgnostikOS" {
+		t.Errorf("expected default Name AgnostikOS, got %q", cfg.Name)
+	}
+}
+
+// --- Build view streaming progress tests ---
+
+func TestBuildView_ProgressStreaming(t *testing.T) {
+	m := newTestModel()
+	m.viewState = BuildView
+	m.progressChan = make(chan string, 20)
+	m.buildMaxSteps = 14
+
+	// Simulate receiving a progress message
+	msg := progressMsg("=== Step 1/14: Prepare directories ===")
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	if len(m2.buildProgress) != 1 {
+		t.Errorf("expected 1 progress message, got %d", len(m2.buildProgress))
+	}
+	if m2.buildCurrentStep != 1 {
+		t.Errorf("expected currentStep 1, got %d", m2.buildCurrentStep)
+	}
+}
+
+func TestBuildView_ProgressDisplay(t *testing.T) {
+	m := newTestModel()
+	m.viewState = BuildView
+	m.buildProgress = []string{
+		"=== Step 1/14: Prepare directories ===",
+		"=== Step 2/14: Download toolchain ===",
+	}
+	m.buildCurrentStep = 2
+	m.buildMaxSteps = 14
+
+	view := m.View()
+	if view == "" {
+		t.Error("expected non-empty build view with progress")
+	}
+	if !strings.Contains(view, "2/14") {
+		t.Error("expected progress indicator 2/14 in view")
 	}
 }
 
 func TestBuildView_CompletionSuccess(t *testing.T) {
 	m := newTestModel()
-	m = sendKey(m, "b")
+	m.viewState = BuildView
+	m.progressChan = make(chan string, 20)
+	m.buildCfg = manager.BuildConfig{OutputISO: "/tmp/test.iso"}
 
 	// Receive completion
-	msg := buildCompletedMsg{err: nil}
+	msg := buildCompletedMsg{err: nil, iso: "/tmp/test.iso"}
 	updated, _ := m.Update(msg)
 	m2 := updated.(Model)
 
@@ -745,13 +981,17 @@ func TestBuildView_CompletionSuccess(t *testing.T) {
 	if m2.buildErr != nil {
 		t.Errorf("expected no error, got %v", m2.buildErr)
 	}
+	if m2.buildOutputISO != "/tmp/test.iso" {
+		t.Errorf("expected buildOutputISO /tmp/test.iso, got %q", m2.buildOutputISO)
+	}
 }
 
 func TestBuildView_CompletionError(t *testing.T) {
 	m := newTestModel()
-	m = sendKey(m, "b")
+	m.viewState = BuildView
+	m.progressChan = make(chan string, 20)
 
-	msg := buildCompletedMsg{err: errors.New("build failed")}
+	msg := buildCompletedMsg{err: errors.New("build failed"), iso: ""}
 	updated, _ := m.Update(msg)
 	m2 := updated.(Model)
 
@@ -766,16 +1006,56 @@ func TestBuildView_CompletionError(t *testing.T) {
 	}
 }
 
+func TestBuildView_SuccessResultDisplay(t *testing.T) {
+	m := newTestModel()
+	m.viewState = BuildView
+	m.buildDone = true
+	m.buildErr = nil
+	m.buildOutputISO = "/tmp/agnostikos.iso"
+
+	view := m.View()
+	if view == "" {
+		t.Error("expected non-empty build view with success")
+	}
+	if !strings.Contains(view, "Build completed") {
+		t.Error("expected success message in view")
+	}
+	if !strings.Contains(view, "/tmp/agnostikos.iso") {
+		t.Error("expected ISO path in success view")
+	}
+}
+
+func TestBuildView_ErrorResultDisplay(t *testing.T) {
+	m := newTestModel()
+	m.viewState = BuildView
+	m.buildDone = true
+	m.buildErr = errors.New("bootstrap failed: network error")
+
+	view := m.View()
+	if view == "" {
+		t.Error("expected non-empty build view with error")
+	}
+	if !strings.Contains(view, "Build failed") {
+		t.Error("expected error message in view")
+	}
+	if !strings.Contains(view, "network error") {
+		t.Error("expected error details in view")
+	}
+}
+
 func TestBuildView_EscapeToBackendList(t *testing.T) {
 	m := newTestModel()
-	m = sendKey(m, "b")
-	msg := buildCompletedMsg{err: nil}
-	updated, _ := m.Update(msg)
-	m2 := updated.(Model)
+	m.viewState = BuildView
+	m.buildDone = true
+	m.buildErr = nil
+	m.buildOutputISO = "/tmp/test.iso"
 
-	m2 = sendEsc(m2)
-	if m2.viewState != BackendListView {
-		t.Errorf("expected BackendListView after esc, got %v", m2.viewState)
+	m = sendEsc(m)
+	if m.viewState != BackendListView {
+		t.Errorf("expected BackendListView after esc, got %v", m.viewState)
+	}
+	if m.buildProgress != nil {
+		t.Error("expected buildProgress to be cleared")
 	}
 }
 
@@ -790,9 +1070,21 @@ func TestListView_ViewRendering(t *testing.T) {
 
 func TestBuildView_ViewRendering(t *testing.T) {
 	m := newTestModel()
-	m = sendKey(m, "b")
+	m.viewState = BuildView
+	m.buildProgress = []string{"=== Step 1/14: Prepare directories ==="}
+	m.buildCurrentStep = 1
+	m.buildMaxSteps = 14
 	view := m.View()
 	if view == "" {
 		t.Error("expected non-empty build view")
+	}
+}
+
+func TestBuildConfigView_ViewRendering(t *testing.T) {
+	m := newTestModel()
+	m.viewState = BuildConfigView
+	view := m.View()
+	if view == "" {
+		t.Error("expected non-empty build config view")
 	}
 }

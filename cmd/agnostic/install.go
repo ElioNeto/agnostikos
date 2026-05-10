@@ -62,9 +62,9 @@ Otherwise, install a single package specified as argument.`,
 				fmt.Printf("   • %s\n", pkg)
 			}
 
-			mgr := manager.NewAgnosticManager()
-			policy := policyFromConfig(nil)
+			mgr := newManager()
 			for _, pkg := range pp.Packages {
+				policy := policyFromConfig(nil, pkg)
 				b, err := resolveBackend(cmd.Context(), mgr, pkg, policy)
 				if err != nil {
 					return err
@@ -88,7 +88,7 @@ Otherwise, install a single package specified as argument.`,
 				return fmt.Errorf("invalid config: %w", err)
 			}
 
-			mgr := manager.NewAgnosticManager()
+			mgr := newManager()
 			pkgs := append(cfg.Packages.Base, cfg.Packages.Extra...)
 			pkgs = append(pkgs, cfg.Packages.Dev...)
 			pkgs = append(pkgs, cfg.Packages.Desktop...)
@@ -126,8 +126,8 @@ Otherwise, install a single package specified as argument.`,
 				return nil
 			}
 
-			policy := policyFromConfig(cfg)
 			for _, pkg := range pkgs {
+				policy := policyFromConfig(cfg, pkg)
 				b, err := resolveBackend(cmd.Context(), mgr, pkg, policy)
 				if err != nil {
 					return err
@@ -146,8 +146,8 @@ Otherwise, install a single package specified as argument.`,
 			return errors.New("requires a package name argument or --config flag")
 		}
 
-		mgr := manager.NewAgnosticManager()
-		policy := policyFromConfig(nil)
+		mgr := newManager()
+		policy := policyFromConfig(nil, args[0])
 
 		// Determine which backend to use
 		b := backend
@@ -198,7 +198,9 @@ func resolveBackend(ctx context.Context, mgr *manager.AgnosticManager, pkg strin
 }
 
 // policyFromConfig builds a ResolvePolicy from a config file (or uses defaults).
-func policyFromConfig(cfg *config.Config) manager.ResolvePolicy {
+// When pkgName is non-empty, per-package version policies from cfg.PackagePolicies
+// are consulted and may override the global backend-level version.
+func policyFromConfig(cfg *config.Config, pkgName string) manager.ResolvePolicy {
 	policy := manager.ResolvePolicy{
 		Priority: []string{"pacman", "nix", "flatpak"},
 		Version:  "latest",
@@ -212,6 +214,21 @@ func policyFromConfig(cfg *config.Config) manager.ResolvePolicy {
 			policy.Version = cfg.Backends.Version
 		}
 		policy.Fallback = cfg.Backends.FallbackEnabled
+
+		// Apply per-package version policy override
+		if pkgName != "" {
+			for _, pp := range cfg.PackagePolicies {
+				if pp.Name == pkgName {
+					switch pp.Version {
+					case "latest", "stable":
+						policy.Version = pp.Version
+					case "pinned":
+						policy.Version = pp.Pin
+					}
+					break
+				}
+			}
+		}
 	}
 	return policy
 }

@@ -327,6 +327,7 @@ type BootstrapConfig struct {
 	ConfigsDir     string // diretório dos dotfiles embutidos (configs/)
 	AutoLoginUser  string   // usuário para autologin via getty (vazio = desabilitado)
 	MiseRuntimes   []string // runtimes to install via mise (e.g. ["nodejs@lts", "python@3", "ruby", "java"])
+	Progress       chan<- string // canal opcional para notificar progresso do pipeline
 }
 
 // kernelImageName retorna o nome do arquivo da imagem do kernel de acordo com a arquitetura.
@@ -609,6 +610,13 @@ func parseMaxConcurrent(jobs string) int {
 	return n
 }
 
+// emitProgress envia uma mensagem de progresso para o canal, se configurado.
+func emitProgress(cfg BootstrapConfig, msg string) {
+	if cfg.Progress != nil {
+		cfg.Progress <- msg
+	}
+}
+
 // BootstrapAll executa o pipeline completo de construção do RootFS
 func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	if cfg.TargetDir == "" {
@@ -624,6 +632,7 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 		cfg.KernelVersion, cfg.BusyboxVersion, arch, cfg.UEFI, cfg.Force, cfg.Jobs)
 
 	// Step 1: RootFS — idempotente, MkdirAll é no-op se já existe
+	emitProgress(cfg, "=== Step 1/14: Prepare directories ===")
 	fmt.Println("\n=== Step 1/14: Create RootFS ===")
 	if err := CreateRootFS(cfg.TargetDir); err != nil {
 		return fmt.Errorf("create rootfs: %w", err)
@@ -636,42 +645,50 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 
 	// Step 2: Toolchain — download dos tarballs (paralelo, max 3 por padrão)
 	if !cfg.SkipToolchain {
+		emitProgress(cfg, "=== Step 2/14: Download toolchain ===")
 		fmt.Println("\n=== Step 2/14: Download Toolchain ===")
 		maxConc := parseMaxConcurrent(cfg.Jobs)
 		if err := DownloadToolchain(ctx, cfg.TargetDir, maxConc); err != nil {
 			return fmt.Errorf("download toolchain: %w", err)
 		}
 	} else {
+		emitProgress(cfg, "=== Step 2/14: Download toolchain (skipped) ===")
 		fmt.Println("\n=== Step 2/14: Download Toolchain (skipped) ===")
 	}
 
 	// Step 3: Build binutils
 	if !cfg.SkipToolchain {
+		emitProgress(cfg, "=== Step 3/14: Build binutils ===")
 		fmt.Println("\n=== Step 3/14: Build binutils ===")
 		if err := BuildBinutils(ctx, tcCfg); err != nil {
 			return fmt.Errorf("build binutils: %w", err)
 		}
 	} else {
+		emitProgress(cfg, "=== Step 3/14: Build binutils (skipped) ===")
 		fmt.Println("\n=== Step 3/14: Build binutils (skipped) ===")
 	}
 
 	// Step 4: Build GCC (pass 1, C only)
 	if !cfg.SkipToolchain {
+		emitProgress(cfg, "=== Step 4/14: Build GCC (pass 1) ===")
 		fmt.Println("\n=== Step 4/14: Build GCC (pass 1) ===")
 		if err := BuildGCC(ctx, tcCfg); err != nil {
 			return fmt.Errorf("build gcc: %w", err)
 		}
 	} else {
+		emitProgress(cfg, "=== Step 4/14: Build GCC (skipped) ===")
 		fmt.Println("\n=== Step 4/14: Build GCC (skipped) ===")
 	}
 
 	// Step 5: Build glibc
 	if !cfg.SkipToolchain {
+		emitProgress(cfg, "=== Step 5/14: Build glibc ===")
 		fmt.Println("\n=== Step 5/14: Build glibc ===")
 		if err := BuildGLibc(ctx, tcCfg); err != nil {
 			return fmt.Errorf("build glibc: %w", err)
 		}
 	} else {
+		emitProgress(cfg, "=== Step 5/14: Build glibc (skipped) ===")
 		fmt.Println("\n=== Step 5/14: Build glibc (skipped) ===")
 	}
 
@@ -680,8 +697,10 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	kernelArtifact := filepath.Join(cfg.TargetDir, "boot", kernelImage)
 	if !cfg.SkipKernel {
 		if !cfg.Force && artifactExists(kernelArtifact) {
+			emitProgress(cfg, "=== Step 6/14: Build kernel (cached) ===")
 			fmt.Printf("\n=== Step 6/14: Build Kernel (cached: %s) ===\n", kernelArtifact)
 		} else {
+			emitProgress(cfg, "=== Step 6/14: Build kernel ===")
 			fmt.Println("\n=== Step 6/14: Build Kernel ===")
 			kernelCfg := KernelConfig{
 				Version:    cfg.KernelVersion,
@@ -695,6 +714,7 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 			}
 		}
 	} else {
+		emitProgress(cfg, "=== Step 6/14: Build kernel (skipped) ===")
 		fmt.Println("\n=== Step 6/14: Build Kernel (skipped by flag) ===")
 	}
 
@@ -702,8 +722,10 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	busyboxArtifact := filepath.Join(cfg.TargetDir, "busybox-install", "bin", "busybox")
 	if !cfg.SkipBusybox {
 		if !cfg.Force && artifactExists(busyboxArtifact) {
+			emitProgress(cfg, "=== Step 7/14: Build BusyBox (cached) ===")
 			fmt.Printf("\n=== Step 7/14: Build Busybox (cached: %s) ===\n", busyboxArtifact)
 		} else {
+			emitProgress(cfg, "=== Step 7/14: Build BusyBox ===")
 			fmt.Println("\n=== Step 7/14: Build Busybox ===")
 			busyboxCfg := BusyboxConfig{
 				Version:   cfg.BusyboxVersion,
@@ -714,6 +736,7 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 			}
 		}
 	} else {
+		emitProgress(cfg, "=== Step 7/14: Build BusyBox (skipped) ===")
 		fmt.Println("\n=== Step 7/14: Build Busybox (skipped by flag) ===")
 	}
 
@@ -721,8 +744,10 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	initramfsArtifact := filepath.Join(cfg.TargetDir, "boot", "initramfs.img")
 	if !cfg.SkipInitramfs {
 		if !cfg.Force && artifactExists(initramfsArtifact) {
+			emitProgress(cfg, "=== Step 8/14: Prepare initramfs (cached) ===")
 			fmt.Printf("\n=== Step 8/14: Build Initramfs (cached: %s) ===\n", initramfsArtifact)
 		} else {
+			emitProgress(cfg, "=== Step 8/14: Prepare initramfs ===")
 			fmt.Println("\n=== Step 8/14: Build Initramfs ===")
 			outputDir := filepath.Join(cfg.TargetDir, "boot")
 			if err := os.MkdirAll(outputDir, 0755); err != nil {
@@ -733,6 +758,7 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 			}
 		}
 	} else {
+		emitProgress(cfg, "=== Step 8/14: Prepare initramfs (skipped) ===")
 		fmt.Println("\n=== Step 8/14: Build Initramfs (skipped by flag) ===")
 	}
 
@@ -740,8 +766,10 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	grubArtifact := filepath.Join(cfg.TargetDir, "boot", "grub", "grub.cfg")
 	if !cfg.SkipGRUB {
 		if !cfg.Force && artifactExists(grubArtifact) {
+			emitProgress(cfg, "=== Step 9/14: Install GRUB (cached) ===")
 			fmt.Printf("\n=== Step 9/14: Install GRUB (cached: %s) ===\n", grubArtifact)
 		} else {
+			emitProgress(cfg, "=== Step 9/14: Configure GRUB ===")
 			fmt.Println("\n=== Step 9/14: Install GRUB ===")
 			if err := InstallGRUB(ctx, GRUBConfig{
 				RootfsDir:    cfg.TargetDir,
@@ -754,10 +782,12 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 			}
 		}
 	} else {
+		emitProgress(cfg, "=== Step 9/14: Install GRUB (skipped) ===")
 		fmt.Println("\n=== Step 9/14: Install GRUB (skipped by flag) ===")
 	}
 
 	// Step 10: Configure default shell (Zsh)
+	emitProgress(cfg, "=== Step 10/14: Configure default shell ===")
 	fmt.Println("\n=== Step 10/14: Configure Default Shell ===")
 	if err := configureDefaultShell(cfg.TargetDir); err != nil {
 		return fmt.Errorf("configure default shell: %w", err)
@@ -765,13 +795,16 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 
 	// Step 11: Setup mise runtimes (optional)
 	if len(cfg.MiseRuntimes) > 0 {
+		emitProgress(cfg, "=== Step 11/14: Setup mise runtimes ===")
 		fmt.Println("\n=== Step 11/14: Setup Mise Runtimes ===")
 		setupMiseRuntimes(ctx, cfg.TargetDir, cfg.MiseRuntimes)
 	} else {
+		emitProgress(cfg, "=== Step 11/14: Setup mise runtimes (skipped) ===")
 		fmt.Println("\n=== Step 11/14: Setup Mise Runtimes (skipped) ===")
 	}
 
 	// Step 12: Configure init system (busybox init with inittab)
+	emitProgress(cfg, "=== Step 12/14: Configure init system ===")
 	fmt.Println("\n=== Step 12/14: Configure Init System (busybox inittab) ===")
 	if err := configureInittab(cfg.TargetDir, cfg.AutoLoginUser); err != nil {
 		return fmt.Errorf("configure inittab: %w", err)
@@ -779,6 +812,7 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 
 	// Step 13: Apply dotfiles (optional)
 	if cfg.DotfilesApply {
+		emitProgress(cfg, "=== Step 13/14: Apply dotfiles ===")
 		fmt.Println("\n=== Step 13/14: Apply Dotfiles ===")
 		configsDir := cfg.ConfigsDir
 		if configsDir == "" {
@@ -791,15 +825,18 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 		}
 		fmt.Println("[dotfiles] applied to rootfs")
 	} else {
+		emitProgress(cfg, "=== Step 13/14: Apply dotfiles (skipped) ===")
 		fmt.Println("\n=== Step 13/14: Apply Dotfiles (skipped) ===")
 	}
 
 	// Step 14: Install agnostic binary
+	emitProgress(cfg, "=== Step 14/14: Generate ISO ===")
 	fmt.Println("\n=== Step 14/14: Install agnostic binary ===")
 	if err := installAgnosticBinary(cfg.TargetDir, cfg.Arch); err != nil {
 		return fmt.Errorf("install agnostic binary: %w", err)
 	}
 
+	emitProgress(cfg, "=== Bootstrap complete ===")
 	fmt.Printf("\n[bootstrap] ✅ Bootstrap complete at %s\n", cfg.TargetDir)
 	return nil
 }

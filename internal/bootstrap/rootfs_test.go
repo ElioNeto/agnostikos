@@ -1404,11 +1404,9 @@ func TestDownloadToolchain_ParallelSuccess(t *testing.T) {
 }
 
 func TestDownloadToolchain_ErrorPropagation(t *testing.T) {
-	// Server returns 500 for the second package.
-	callCount := atomic.Int32{}
+	// Server returns 500 specifically for /pkg-b.tar.xz.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := callCount.Add(1)
-		if n == 2 {
+		if strings.HasSuffix(r.URL.Path, "pkg-b.tar.xz") {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}

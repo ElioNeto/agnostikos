@@ -35,7 +35,7 @@ Use --json to output a JSON array.
 Use --export to output a YAML-compatible block.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		mgr := manager.NewAgnosticManager()
+		mgr := newManager()
 
 		// Determine which backends to query
 		backendsToQuery := make(map[string]manager.PackageService)

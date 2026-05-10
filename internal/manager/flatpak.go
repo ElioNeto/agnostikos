@@ -13,8 +13,8 @@ type FlatpakBackend struct {
 	exec Executor
 }
 
-func NewFlatpakBackend() *FlatpakBackend {
-	return &FlatpakBackend{exec: &RealExecutor{}}
+func NewFlatpakBackend(exec Executor) *FlatpakBackend {
+	return &FlatpakBackend{exec: exec}
 }
 
 func (f *FlatpakBackend) Install(pkgName string) error {

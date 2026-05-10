@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ElioNeto/agnostikos/internal/manager"
 	"github.com/ElioNeto/agnostikos/internal/tui"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -26,7 +25,7 @@ Screens:
 Use arrow keys to navigate, Enter to select, Esc to go back.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		mgr := manager.NewAgnosticManager()
+		mgr := newManager()
 		model := tui.InitialModel(mgr)
 
 		p := tea.NewProgram(model, tea.WithAltScreen())

@@ -81,11 +81,15 @@ func Execute() {
 }
 
 // newManager creates a manager.AgnosticManager respecting the --no-sandbox flag
-// and initialises the package metadata cache with default settings.
+// and initialises the package metadata cache with config or default settings.
 //
-// The cache directory is ~/.cache/agnostikos (or the OS temporary directory
-// if the user cache directory cannot be determined). TTL defaults are 24h
-// for stable and 1h for latest policy.
+// Cache defaults:
+//   - Directory: ~/.cache/agnostikos
+//   - Stable TTL: 24h
+//   - Latest TTL: 1h
+//
+// If a config file is provided via --config/-c, cache settings from the
+// config override these defaults.
 func newManager() *manager.AgnosticManager {
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
@@ -93,7 +97,33 @@ func newManager() *manager.AgnosticManager {
 	}
 	cacheDir = filepath.Join(cacheDir, "agnostikos")
 
-	pkgCache := cache.New(cacheDir, 24*time.Hour, 1*time.Hour)
+	stableTTL := 24 * time.Hour
+	latestTTL := 1 * time.Hour
+
+	// Load config if provided to apply cache settings.
+	if configFile != "" {
+		if cfg, cfgErr := config.Load(configFile); cfgErr == nil {
+			if cfg.Cache.Dir != "" {
+				if filepath.IsAbs(cfg.Cache.Dir) {
+					cacheDir = cfg.Cache.Dir
+				} else {
+					// Resolve relative path from config file directory.
+					configDir := filepath.Dir(configFile)
+					if absPath, absErr := filepath.Abs(filepath.Join(configDir, cfg.Cache.Dir)); absErr == nil {
+						cacheDir = absPath
+					}
+				}
+			}
+			if cfg.Cache.StableTTL > 0 {
+				stableTTL = cfg.Cache.StableTTL
+			}
+			if cfg.Cache.LatestTTL > 0 {
+				latestTTL = cfg.Cache.LatestTTL
+			}
+		}
+	}
+
+	pkgCache := cache.New(cacheDir, stableTTL, latestTTL)
 
 	opts := []func(*manager.AgnosticManager){manager.WithCache(pkgCache)}
 	if noSandbox {

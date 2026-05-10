@@ -529,7 +529,7 @@ func (s *Server) handleISOStartBuild(w http.ResponseWriter, r *http.Request) {
 		s.broadcast(SSEEvent{Event: "iso:progress", Data: "Starting bootstrap..."})
 		s.broadcast(SSEEvent{Event: "iso:progress", Data: "Building ISO image, please wait..."})
 
-		err := s.mgr.Build(context.Background(), cfg)
+		err := s.mgr.Build(context.Background(), cfg, nil)
 
 		s.progressMu.Lock()
 		s.progress = ""

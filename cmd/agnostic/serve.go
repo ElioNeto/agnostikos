@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"runtime"
 
-	"github.com/ElioNeto/agnostikos/internal/manager"
 	"github.com/ElioNeto/agnostikos/internal/server"
 	"github.com/spf13/cobra"
 )
@@ -33,7 +32,7 @@ Examples:
   agnostic serve --listen 0.0.0.0:8080 --token mytoken
   agnostic serve --tls-cert cert.pem --tls-key key.pem`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		mgr := manager.NewAgnosticManager()
+		mgr := newManager()
 
 		var opts []server.ServerOption
 		if serveToken != "" {

@@ -13,8 +13,8 @@ type NixBackend struct {
 	exec Executor
 }
 
-func NewNixBackend() *NixBackend {
-	return &NixBackend{exec: &RealExecutor{}}
+func NewNixBackend(exec Executor) *NixBackend {
+	return &NixBackend{exec: exec}
 }
 
 func (n *NixBackend) Install(pkgName string) error {

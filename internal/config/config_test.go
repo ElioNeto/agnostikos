@@ -138,3 +138,106 @@ func TestValidate_ValidConfig(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 }
+
+func TestValidate_PackagePoliciesValid(t *testing.T) {
+	cfg := &Config{
+		Version: "1.0",
+		Locale:  "en_US.UTF-8",
+		Backends: struct {
+			Default         string   `yaml:"default"`
+			Fallback        string   `yaml:"fallback"`
+			Priority        []string `yaml:"priority"`
+			Version         string   `yaml:"version"`
+			FallbackEnabled bool     `yaml:"fallback_enabled"`
+		}{Default: "pacman"},
+		PackagePolicies: []PackagePolicy{
+			{Name: "firefox", Version: "latest"},
+			{Name: "neovim", Version: "stable"},
+			{Name: "docker", Version: "pinned", Pin: "24.0.7"},
+			{Name: "git", Version: ""},
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+func TestValidate_PackagePoliciesMissingName(t *testing.T) {
+	cfg := &Config{
+		Version: "1.0",
+		Locale:  "en_US.UTF-8",
+		Backends: struct {
+			Default         string   `yaml:"default"`
+			Fallback        string   `yaml:"fallback"`
+			Priority        []string `yaml:"priority"`
+			Version         string   `yaml:"version"`
+			FallbackEnabled bool     `yaml:"fallback_enabled"`
+		}{Default: "pacman"},
+		PackagePolicies: []PackagePolicy{
+			{Name: "", Version: "latest"},
+		},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for missing name, got nil")
+	}
+}
+
+func TestValidate_PackagePoliciesPinWithWrongVersion(t *testing.T) {
+	cfg := &Config{
+		Version: "1.0",
+		Locale:  "en_US.UTF-8",
+		Backends: struct {
+			Default         string   `yaml:"default"`
+			Fallback        string   `yaml:"fallback"`
+			Priority        []string `yaml:"priority"`
+			Version         string   `yaml:"version"`
+			FallbackEnabled bool     `yaml:"fallback_enabled"`
+		}{Default: "pacman"},
+		PackagePolicies: []PackagePolicy{
+			{Name: "vim", Version: "latest", Pin: "9.1.0"},
+		},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for pin with version latest, got nil")
+	}
+}
+
+func TestValidate_PackagePoliciesPinnedMissingPin(t *testing.T) {
+	cfg := &Config{
+		Version: "1.0",
+		Locale:  "en_US.UTF-8",
+		Backends: struct {
+			Default         string   `yaml:"default"`
+			Fallback        string   `yaml:"fallback"`
+			Priority        []string `yaml:"priority"`
+			Version         string   `yaml:"version"`
+			FallbackEnabled bool     `yaml:"fallback_enabled"`
+		}{Default: "pacman"},
+		PackagePolicies: []PackagePolicy{
+			{Name: "neovim", Version: "pinned", Pin: ""},
+		},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for pinned without pin, got nil")
+	}
+}
+
+func TestValidate_PackagePoliciesInvalidVersion(t *testing.T) {
+	cfg := &Config{
+		Version: "1.0",
+		Locale:  "en_US.UTF-8",
+		Backends: struct {
+			Default         string   `yaml:"default"`
+			Fallback        string   `yaml:"fallback"`
+			Priority        []string `yaml:"priority"`
+			Version         string   `yaml:"version"`
+			FallbackEnabled bool     `yaml:"fallback_enabled"`
+		}{Default: "pacman"},
+		PackagePolicies: []PackagePolicy{
+			{Name: "foo", Version: "invalid-value"},
+		},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for invalid version policy, got nil")
+	}
+}

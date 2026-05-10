@@ -157,10 +157,18 @@ type BuildConfig struct {
 	Name           string `json:"name,omitempty"`
 	Version        string `json:"version,omitempty"`
 	BootLabel      string `json:"boot_label,omitempty"`
+	Progress       chan<- string `json:"-"` // canal opcional para notificar progresso do build
 }
 
 // Build executa o pipeline completo de bootstrap e geração de ISO.
-func (m *AgnosticManager) Build(ctx context.Context, cfg BuildConfig) error {
+// Recebe um canal opcional progress para notificar o progresso do build.
+// O progress channel não é fechado pelo Build — o caller deve
+// fechar o canal após Build() retornar.
+func (m *AgnosticManager) Build(ctx context.Context, cfg BuildConfig, progress chan<- string) error {
+	if progress != nil {
+		cfg.Progress = progress
+	}
+
 	busyboxVersion := cfg.BusyboxVersion
 	if busyboxVersion == "" {
 		busyboxVersion = "1.36.1"
@@ -181,6 +189,7 @@ func (m *AgnosticManager) Build(ctx context.Context, cfg BuildConfig) error {
 		SkipInitramfs:  cfg.SkipInitramfs,
 		SkipGRUB:       cfg.SkipGRUB,
 		Force:          cfg.Force,
+		Progress:       cfg.Progress,
 	}
 
 	if err := bootstrap.BootstrapAll(ctx, bootstrapCfg); err != nil {
@@ -220,6 +229,7 @@ func (m *AgnosticManager) Build(ctx context.Context, cfg BuildConfig) error {
 		Output:        isoOut,
 		UEFI:          cfg.UEFI,
 		BootLabel:     bootLabel,
+		Progress:      cfg.Progress,
 	}
 
 	if err := bootstrap.GenerateISO(isoCfg); err != nil {

@@ -115,6 +115,53 @@ func RunIsolatedWithContext(ctx context.Context, name string, args ...string) er
 	)
 }
 
+// RunIsolatedWithOutput is like RunIsolatedWithOptions but returns the combined
+// output of the command instead of connecting it to stdout/stderr.
+//
+// If the context is cancelled, the returned error wraps context.Canceled or
+// context.DeadlineExceeded.
+//
+// Requires CAP_SYS_ADMIN (and CAP_SYS_CHROOT if WithRootFS is used).
+func RunIsolatedWithOutput(ctx context.Context, name string, args []string, options ...IsolationOption) ([]byte, error) {
+	cfg := NewIsolationConfig()
+	for _, opt := range options {
+		opt(cfg)
+	}
+	return runIsolatedWithOutput(ctx, cfg, name, args...)
+}
+
+// runIsolatedWithOutput is the output-capturing variant of runIsolated.
+func runIsolatedWithOutput(ctx context.Context, cfg *IsolationConfig, name string, args ...string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("isolated run cancelled: %w", err)
+	}
+
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Cloneflags: cfg.Cloneflags,
+	}
+
+	if cfg.RootFS != "" {
+		fi, err := os.Stat(cfg.RootFS)
+		if err != nil {
+			return nil, fmt.Errorf("chroot target %q: %w", cfg.RootFS, err)
+		}
+		if !fi.IsDir() {
+			return nil, fmt.Errorf("chroot target %q is not a directory", cfg.RootFS)
+		}
+		cmd.SysProcAttr.Chroot = cfg.RootFS
+	}
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		if ctx.Err() != nil {
+			return out, fmt.Errorf("isolated run cancelled: %w", ctx.Err())
+		}
+		return out, fmt.Errorf("isolated run failed: %w", err)
+	}
+	return out, nil
+}
+
 // RunIsolatedWithOptions runs a command with full control over namespace
 // isolation and optional chroot. Use the functional options to configure
 // the isolation behaviour.

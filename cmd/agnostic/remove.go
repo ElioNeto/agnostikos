@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ElioNeto/agnostikos/internal/manager"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +23,7 @@ var removeCmd = &cobra.Command{
 	Short:   "Remove a package via the specified backend",
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		mgr := manager.NewAgnosticManager()
+		mgr := newManager()
 		svc, ok := mgr.Backends[backend]
 		if !ok {
 			return fmt.Errorf("backend '%s' not found — available: pacman, nix, flatpak", backend)

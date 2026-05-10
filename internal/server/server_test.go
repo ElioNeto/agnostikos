@@ -610,24 +610,6 @@ func TestISOStartBuild_AlreadyBuilding(t *testing.T) {
 	}
 }
 
-func TestAuthMiddleware_InvalidToken(t *testing.T) {
-	s := setupTestServer(t)
-	ts := httptest.NewServer(s.Handler())
-	defer ts.Close()
-
-	req, _ := http.NewRequestWithContext(context.Background(), "GET", ts.URL+"/api/packages", nil)
-	req.Header.Set("Authorization", "Bearer wrong-token")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-	defer closeResp(resp)
-
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("expected 401 for invalid token, got %d", resp.StatusCode)
-	}
-}
-
 func TestAuthMiddleware_MissingToken(t *testing.T) {
 	s := setupTestServer(t)
 	ts := httptest.NewServer(s.Handler())

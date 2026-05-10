@@ -19,7 +19,7 @@ func TestPacmanBackend_Integration_Install(t *testing.T) {
 	}
 	skipWithoutBin(t, "pacman")
 
-	p := NewPacmanBackend()
+	p := NewPacmanBackend(&RealExecutor{})
 	// Test with a tiny package that is likely cached or very small
 	if err := p.Install("tiny"); err != nil {
 		// It's OK if the package doesn't exist; we're testing the plumbing
@@ -30,7 +30,7 @@ func TestPacmanBackend_Integration_Install(t *testing.T) {
 func TestPacmanBackend_Integration_Search(t *testing.T) {
 	skipWithoutBin(t, "pacman")
 
-	p := NewPacmanBackend()
+	p := NewPacmanBackend(&RealExecutor{})
 	results, err := p.Search("firefox")
 	if err != nil {
 		t.Fatalf("pacman search failed: %v", err)
@@ -48,7 +48,7 @@ func TestPacmanBackend_Integration_Search(t *testing.T) {
 func TestPacmanBackend_Integration_List(t *testing.T) {
 	skipWithoutBin(t, "pacman")
 
-	p := NewPacmanBackend()
+	p := NewPacmanBackend(&RealExecutor{})
 	results, err := p.List()
 	if err != nil {
 		t.Fatalf("pacman list failed: %v", err)
@@ -62,7 +62,7 @@ func TestPacmanBackend_Integration_List(t *testing.T) {
 func TestNixBackend_Integration_Search(t *testing.T) {
 	skipWithoutBin(t, "nix")
 
-	n := NewNixBackend()
+	n := NewNixBackend(&RealExecutor{})
 	results, err := n.Search("hello")
 	if err != nil {
 		t.Fatalf("nix search failed: %v", err)
@@ -80,7 +80,7 @@ func TestNixBackend_Integration_Search(t *testing.T) {
 func TestNixBackend_Integration_List(t *testing.T) {
 	skipWithoutBin(t, "nix")
 
-	n := NewNixBackend()
+	n := NewNixBackend(&RealExecutor{})
 	results, err := n.List()
 	if err != nil {
 		t.Fatalf("nix list failed: %v", err)
@@ -91,7 +91,7 @@ func TestNixBackend_Integration_List(t *testing.T) {
 func TestFlatpakBackend_Integration_Search(t *testing.T) {
 	skipWithoutBin(t, "flatpak")
 
-	f := NewFlatpakBackend()
+	f := NewFlatpakBackend(&RealExecutor{})
 	results, err := f.Search("firefox")
 	if err != nil {
 		t.Fatalf("flatpak search failed: %v", err)
@@ -109,7 +109,7 @@ func TestFlatpakBackend_Integration_Search(t *testing.T) {
 func TestFlatpakBackend_Integration_List(t *testing.T) {
 	skipWithoutBin(t, "flatpak")
 
-	f := NewFlatpakBackend()
+	f := NewFlatpakBackend(&RealExecutor{})
 	results, err := f.List()
 	if err != nil {
 		t.Fatalf("flatpak list failed: %v", err)
