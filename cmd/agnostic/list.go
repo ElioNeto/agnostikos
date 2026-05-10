@@ -113,10 +113,17 @@ func init() {
 	rootCmd.AddCommand(listCmd)
 }
 
-// resetListFlags resets package-level variables to their defaults
-// so that tests don't leak state between each other.
+// resetListFlags resets package-level variables and cobra flag state
+// to their defaults so that tests don't leak state between each other.
 func resetListFlags() {
 	listJSON = false
 	listExport = false
 	backend = "pacman"
+	// Reset cobra flag "Changed" state — otherwise a previous test
+	// that explicitly passed --backend will leave Changed() == true.
+	if listCmd != nil {
+		if f := listCmd.Flags().Lookup("backend"); f != nil {
+			f.Changed = false
+		}
+	}
 }

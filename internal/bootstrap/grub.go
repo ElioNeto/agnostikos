@@ -87,13 +87,17 @@ func InstallGRUB(ctx context.Context, cfg GRUBConfig) error {
 		return fmt.Errorf("mkdir grub dir: %w", err)
 	}
 
-	// console=tty0     → saída vai para o VGA virtual da VM (virt-manager/SPICE/VNC)
+	// Múltiplas consoles:
+	//   console=tty0            → saída VGA (virt-manager/SPICE/VNC)
+	//   console=ttyS0,115200    → saída serial (virsh console, CI headless)
+	// O kernel envia mensagens para TODAS as consoles especificadas.
+	// A ÚLTIMA console na linha se torna /dev/console.
 	// quiet loglevel=3 → suprime mensagens de debug do kernel (kworker/dying etc.)
 	grubCfg := `set timeout=5
 set default=0
 
 menuentry "Agnostikos Linux" {
-  linux /boot/vmlinuz root=/dev/ram0 console=tty0 quiet loglevel=3
+  linux /boot/vmlinuz root=/dev/ram0 console=tty0 console=ttyS0,115200 quiet loglevel=3
   initrd /boot/initramfs.img
 }
 `

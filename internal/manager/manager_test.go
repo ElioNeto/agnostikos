@@ -407,15 +407,23 @@ func TestFlatpakBackend_Search_ExecError(t *testing.T) {
 
 func TestNewAgnosticManager_HasAllBackends(t *testing.T) {
 	mgr := NewAgnosticManager()
-	for _, name := range []string{"pacman", "nix", "flatpak"} {
-		if _, ok := mgr.Backends[name]; !ok {
-			t.Errorf("expected backend '%s' to be registered", name)
-		}
+	// Todos os backends agora são registrados condicionalmente com base
+	// na presença do binário no PATH.
+	backends := map[string]string{
+		"pacman":  "pacman",
+		"nix":     "nix",
+		"flatpak": "flatpak",
+		"apt":     "apt-get",
+		"dnf":     "dnf",
+		"yum":     "yum",
+		"zypper":  "zypper",
+		"brew":    "brew",
 	}
-	// apt é registrado condicionalmente se apt-get estiver no PATH
-	if _, err := exec.LookPath("apt-get"); err == nil {
-		if _, ok := mgr.Backends["apt"]; !ok {
-			t.Error("expected backend 'apt' to be registered when apt-get is available")
+	for name, bin := range backends {
+		if _, err := exec.LookPath(bin); err == nil {
+			if _, ok := mgr.Backends[name]; !ok {
+				t.Errorf("expected backend '%s' to be registered when '%s' is in PATH", name, bin)
+			}
 		}
 	}
 }
@@ -431,10 +439,24 @@ func TestAgnosticManager_RegisterBackend(t *testing.T) {
 func TestAgnosticManager_ListBackends(t *testing.T) {
 	mgr := NewAgnosticManager()
 	list := mgr.ListBackends()
-	// Core backends: pacman, nix, flatpak; apt é adicionado condicionalmente
-	minExpected := 3
-	if len(list) < minExpected {
-		t.Errorf("expected at least %d backends, got %d: %v", minExpected, len(list), list)
+	// ListBackends deve retornar exatamente os backends registrados
+	// (que agora são condicionais com base na presença do binário).
+	if len(list) != len(mgr.Backends) {
+		t.Errorf("expected %d backends, got %d", len(mgr.Backends), len(list))
+	}
+	// Verifica que não há duplicatas
+	seen := make(map[string]bool)
+	for _, name := range list {
+		if seen[name] {
+			t.Errorf("duplicate backend in list: %s", name)
+		}
+		seen[name] = true
+	}
+	// Verifica que todo backend na lista existe no map
+	for name := range mgr.Backends {
+		if !seen[name] {
+			t.Errorf("backend %s is in Backends map but not in ListBackends()", name)
+		}
 	}
 }
 

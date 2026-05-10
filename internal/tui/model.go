@@ -278,6 +278,9 @@ func (m Model) handleBackendListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cursor++
 		}
 	case "enter":
+		if len(m.backends) == 0 {
+			return m, nil
+		}
 		m.viewState = SearchView
 		m.searchInput.Focus()
 		m.searchInput.SetValue("")
@@ -286,6 +289,9 @@ func (m Model) handleBackendListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchCursor = 0
 		return m, textinput.Blink
 	case "l":
+		if len(m.backends) == 0 {
+			return m, nil
+		}
 		m.viewState = ListView
 		m.loading = true
 		m.listResults = nil
@@ -559,14 +565,23 @@ func (m Model) backendListView() string {
 	b.WriteString("\n\n")
 	b.WriteString("Select a backend:\n\n")
 
-	for i, backend := range m.backends {
-		cursor := "  "
-		line := fmt.Sprintf("%s%s", cursor, backend)
-		if i == m.cursor {
-			line = selectedStyle.Render("> " + backend)
-		}
-		b.WriteString(line)
+	if len(m.backends) == 0 {
+		b.WriteString(errorStyle.Render("  No package managers found on this system.\n"))
+		b.WriteString("  Install pacman, nix, flatpak, apt, dnf, or brew\n")
+		b.WriteString("  and restart agnostic to use them as backends.\n")
 		b.WriteString("\n")
+		b.WriteString("  You can still build an AgnosticOS ISO:\n")
+		b.WriteString("  Press 'b' to open the build configuration.\n")
+	} else {
+		for i, backend := range m.backends {
+			cursor := "  "
+			line := fmt.Sprintf("%s%s", cursor, backend)
+			if i == m.cursor {
+				line = selectedStyle.Render("> " + backend)
+			}
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
 	}
 
 	b.WriteString("\n")

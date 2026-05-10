@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/ElioNeto/agnostikos/internal/manager"
 	"github.com/spf13/cobra"
@@ -35,7 +36,7 @@ var searchCmd = &cobra.Command{
 
 		svc, ok := mgr.Backends[backend]
 		if !ok {
-			return fmt.Errorf("backend '%s' not found — available: pacman, nix, flatpak", backend)
+			return fmt.Errorf("backend '%s' not found — available: %s", backend, strings.Join(mgr.ListBackends(), ", "))
 		}
 
 		results, err := svc.Search(args[0])

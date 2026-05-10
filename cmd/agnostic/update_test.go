@@ -27,6 +27,7 @@ func TestUpdateCmd_InvalidBackend(t *testing.T) {
 }
 
 func TestUpdateCmd_SpecificPackage_DryRun(t *testing.T) {
+	skipIfNoBackend(t, "pacman")
 	resetUpdateFlags()
 	buf := &bytes.Buffer{}
 	rootCmd.SetOut(buf)
@@ -48,6 +49,7 @@ func TestUpdateCmd_SpecificPackage_DryRun(t *testing.T) {
 }
 
 func TestUpdateCmd_All_DryRun(t *testing.T) {
+	skipIfNoBackend(t, "pacman")
 	resetUpdateFlags()
 	buf := &bytes.Buffer{}
 	rootCmd.SetOut(buf)
@@ -66,6 +68,7 @@ func TestUpdateCmd_All_DryRun(t *testing.T) {
 }
 
 func TestUpdateCmd_NoArgsDefaultToAll_DryRun(t *testing.T) {
+	skipIfNoBackend(t, "pacman")
 	resetUpdateFlags()
 	buf := &bytes.Buffer{}
 	rootCmd.SetOut(buf)

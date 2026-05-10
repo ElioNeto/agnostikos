@@ -50,10 +50,20 @@ func NewAgnosticManager(opts ...func(*AgnosticManager)) *AgnosticManager {
 		exe = &IsolatedExecutor{}
 	}
 
-	backends := map[string]PackageService{
-		"pacman":  NewPacmanBackend(exe),
-		"nix":     NewNixBackend(exe),
-		"flatpak": NewFlatpakBackend(exe),
+	backends := map[string]PackageService{}
+
+	// Registra cada backend apenas se o binário correspondente estiver
+	// disponível no PATH. Isso evita que backends inexistentes apareçam
+	// na TUI mas falhem em todas as operações (ex: dentro da AgnosticOS
+	// initramfs, onde nenhum package manager está instalado).
+	if _, err := exec.LookPath("pacman"); err == nil {
+		backends["pacman"] = NewPacmanBackend(exe)
+	}
+	if _, err := exec.LookPath("nix"); err == nil {
+		backends["nix"] = NewNixBackend(exe)
+	}
+	if _, err := exec.LookPath("flatpak"); err == nil {
+		backends["flatpak"] = NewFlatpakBackend(exe)
 	}
 
 	// Registra APT backend se apt-get estiver disponível no PATH

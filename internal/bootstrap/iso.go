@@ -108,10 +108,11 @@ func GenerateISO(cfg ISOConfig) error {
 	}
 
 	// Criar grub.cfg para a ISO.
-	// console=tty0     → saída vai para o VGA virtual da VM (virt-manager/SPICE/VNC).
-	// quiet loglevel=3 → suprime mensagens de debug do kernel (kworker/dying etc.).
-	// console=ttyS0 removido intencionalmente: evita replicar output no console serial
-	// do host via virsh console.
+	// console=tty0              → saída vai para o VGA virtual da VM (virt-manager/SPICE/VNC).
+	// console=ttyS0,115200      → saída também vai para o console serial (virsh console).
+	// quiet loglevel=3          → suprime mensagens de debug do kernel (kworker/dying etc.).
+	// Ambas consoles ativas permitem que o initramfs init script detecte qual TTY
+	// está disponível (via /proc/cmdline) e abra o shell no console correto.
 	grubDir := filepath.Join(bootDir, "grub")
 	if err := os.MkdirAll(grubDir, 0755); err != nil {
 		return fmt.Errorf("mkdir grubDir: %w", err)
@@ -120,7 +121,7 @@ func GenerateISO(cfg ISOConfig) error {
 set default=0
 
 menuentry "%s %s" {
-    linux /boot/vmlinuz console=tty0 quiet loglevel=3
+    linux /boot/vmlinuz console=tty0 console=ttyS0,115200 quiet loglevel=3
     initrd /boot/initramfs.img
 }
 `, cfg.Name, cfg.Version)

@@ -74,11 +74,53 @@ fi
 echo "Type 'exit' or press Ctrl+D to power off."
 echo ""
 
-# Open interactive shell on tty1 (VM virtual display / VGA).
-# setsid creates a new session; cttyhack makes tty1 the controlling
-# terminal so keyboard input goes to the VM window, not virsh console.
-exec setsid cttyhack /bin/sh < /dev/tty1 > /dev/tty1 2>&1
-poweroff -f
+# Determine the best console device.
+# Priority:
+#   1. Consoles specified in kernel cmdline (console= parameter, in order)
+#   2. /dev/tty1  — VGA / SPICE / virt-manager display
+#   3. /dev/ttyS0 — serial console (used by virsh console, CI headless)
+#   4. /dev/hvc0  — virtio console
+#   5. fallback   — no controlling TTY (last resort)
+#
+# Kernel cmdline parsing: extract each console= parameter value,
+# strip optional baud rate (e.g., "ttyS0,115200" -> "ttyS0"),
+# and build the device path (e.g., "ttyS0" -> "/dev/ttyS0").
+#
+# setsid creates a new session; cttyhack assigns the controlling terminal
+# so keyboard input goes to the correct console.
+if [ -f /proc/cmdline ]; then
+    CMDLINE=$(cat /proc/cmdline)
+    for token in $CMDLINE; do
+        case "$token" in
+            console=*)
+                # Extract value after "console=" and strip baud rate
+                CON="${token#console=}"
+                CON="${CON%%,*}"
+                case "$CON" in
+                    tty0)     CONS="/dev/tty1" ;;
+                    ttyS0)    CONS="/dev/ttyS0" ;;
+                    tty1)     CONS="/dev/tty1" ;;
+                    hvc0)     CONS="/dev/hvc0" ;;
+                    *)        CONS="/dev/$CON" ;;
+                esac
+                if [ -c "$CONS" ]; then
+                    exec setsid cttyhack /bin/sh < "$CONS" > "$CONS" 2>&1
+                fi
+                ;;
+        esac
+    done
+fi
+
+# Fallback: try common console devices in order
+for tty in /dev/tty1 /dev/ttyS0 /dev/hvc0; do
+    if [ -c "$tty" ]; then
+        exec setsid cttyhack /bin/sh < "$tty" > "$tty" 2>&1
+    fi
+done
+
+# Last resort: no device console found
+echo "Warning: no console device found, starting shell without controlling TTY."
+exec /bin/sh
 `
 	initPath := filepath.Join(initDir, "init")
 	if err := os.WriteFile(initPath, []byte(initScript), 0755); err != nil {

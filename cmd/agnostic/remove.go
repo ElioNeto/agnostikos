@@ -26,7 +26,7 @@ var removeCmd = &cobra.Command{
 		mgr := newManager()
 		svc, ok := mgr.Backends[backend]
 		if !ok {
-			return fmt.Errorf("backend '%s' not found — available: pacman, nix, flatpak", backend)
+			return fmt.Errorf("backend '%s' not found — available: %s", backend, strings.Join(mgr.ListBackends(), ", "))
 		}
 
 		pkg := args[0]

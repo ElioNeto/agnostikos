@@ -31,6 +31,7 @@ func TestListCmd_Default(t *testing.T) {
 }
 
 func TestListCmd_BackendFilter(t *testing.T) {
+	skipIfNoBackend(t, "nix")
 	resetListFlags()
 	buf := &bytes.Buffer{}
 	rootCmd.SetOut(buf)
@@ -105,6 +106,7 @@ func TestListCmd_Export(t *testing.T) {
 }
 
 func TestListCmd_JSONWithBackend(t *testing.T) {
+	skipIfNoBackend(t, "pacman")
 	resetListFlags()
 	buf := &bytes.Buffer{}
 	rootCmd.SetOut(buf)
@@ -126,6 +128,7 @@ func TestListCmd_JSONWithBackend(t *testing.T) {
 }
 
 func TestListCmd_ExportWithBackend(t *testing.T) {
+	skipIfNoBackend(t, "nix")
 	resetListFlags()
 	buf := &bytes.Buffer{}
 	rootCmd.SetOut(buf)
