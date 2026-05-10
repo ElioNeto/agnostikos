@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -31,14 +32,16 @@ type ToolchainPackage struct {
 	Name   string
 	URL    string
 	SHA256 string // SHA256 checksum hex; "verify_at_runtime" as placeholder
+	SHA512 string // SHA512 checksum hex (used when non-empty, takes priority over SHA256)
 }
 
-// DefaultToolchain lista os pacotes base
-// SHA256 values should be updated to real hashes from upstream SHA256SUMS files.
+// DefaultToolchain lista os pacotes base com checksums reais.
+// Binutils: SHA512 obtido do arquivo .sha512 do upstream (não publica SHA256).
+// GCC e glibc: SHA256 obtido dos checksums oficiais (SHA256SUMS).
 var DefaultToolchain = []ToolchainPackage{
-	{Name: "binutils-2.42", URL: "https://sourceware.org/pub/binutils/releases/binutils-2.42.tar.xz", SHA256: "verify_at_runtime"},
-	{Name: "gcc-14.1.0", URL: "https://ftp.gnu.org/gnu/gcc/gcc-14.1.0/gcc-14.1.0.tar.xz", SHA256: "verify_at_runtime"},
-	{Name: "glibc-2.39", URL: "https://ftp.gnu.org/gnu/glibc/glibc-2.39.tar.xz", SHA256: "verify_at_runtime"},
+	{Name: "binutils-2.42", URL: "https://sourceware.org/pub/binutils/releases/binutils-2.42.tar.xz", SHA256: "verify_at_runtime", SHA512: "155f3ba14cd220102f4f29a4f1e5cfee3c48aa03b74603460d05afb73c70d6657a9d87eee6eb88bf13203fe6f31177a5c9addc04384e956e7da8069c8ecd20a6"},
+	{Name: "gcc-14.3.0", URL: "https://ftp.gnu.org/gnu/gcc/gcc-14.3.0/gcc-14.3.0.tar.xz", SHA256: "e0dc77297625631ac8e50fa92fffefe899a4eb702592da5c32ef04e2293aca3a"},
+	{Name: "glibc-2.39", URL: "https://ftp.gnu.org/gnu/glibc/glibc-2.39.tar.xz", SHA256: "f77bd47cf8170c57365ae7bf86696c118adb3b120d3259c64c502d3dc1e2d926"},
 }
 
 // FHSDirectories é a árvore de diretórios do Filesystem Hierarchy Standard
@@ -192,7 +195,7 @@ func DownloadToolchain(ctx context.Context, rootfsDir string, maxConcurrent int)
 			defer func() { <-sem }()
 
 			fmt.Printf("[toolchain] downloading %s...\n", pkg.Name)
-			if err := downloadFile(ctx, dest, pkg.URL, pkg.SHA256); err != nil {
+			if err := downloadFile(ctx, dest, pkg.URL, pkg.SHA256, pkg.SHA512); err != nil {
 				return fmt.Errorf("download %s: %w", pkg.Name, err)
 			}
 			progress.addDone(pkg.Name)
@@ -230,10 +233,31 @@ func verifySHA256(filePath, expectedHex string) error {
 	return nil
 }
 
+// verifySHA512 computes the SHA512 hash of a file and compares it to the expected hex string.
+func verifySHA512(filePath, expectedHex string) error {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("open file: %w", err)
+	}
+	defer f.Close()
+
+	h := sha512.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return fmt.Errorf("read file: %w", err)
+	}
+
+	got := hex.EncodeToString(h.Sum(nil))
+	if !strings.EqualFold(got, expectedHex) {
+		return fmt.Errorf("SHA512 mismatch: got %s, expected %s", got, expectedHex)
+	}
+	return nil
+}
+
 // downloadFile faz o download de uma URL para um arquivo local.
 // Se expectedSHA256 for preenchido (e diferente de "verify_at_runtime"),
 // verifica a integridade após o download e remove o arquivo em caso de falha.
-func downloadFile(ctx context.Context, dest, url, expectedSHA256 string) error {
+// Se expectedSHA512 for preenchido, tem prioridade sobre SHA256.
+func downloadFile(ctx context.Context, dest, url, expectedSHA256, expectedSHA512 string) error {
 	if enforceHTTPS && !strings.HasPrefix(url, "https://") {
 		return fmt.Errorf("HTTPS required for download: %s", url)
 	}
@@ -259,8 +283,14 @@ func downloadFile(ctx context.Context, dest, url, expectedSHA256 string) error {
 		return fmt.Errorf("write file: %w", err)
 	}
 
-	// Verify SHA256 after successful download
-	if expectedSHA256 != "" && expectedSHA256 != "verify_at_runtime" {
+	// Verify SHA512 (takes priority) or SHA256 after successful download
+	if expectedSHA512 != "" {
+		f.Close()
+		if err := verifySHA512(dest, expectedSHA512); err != nil {
+			_ = os.Remove(dest)
+			return fmt.Errorf("integrity check: %w", err)
+		}
+	} else if expectedSHA256 != "" && expectedSHA256 != "verify_at_runtime" {
 		f.Close()
 		if err := verifySHA256(dest, expectedSHA256); err != nil {
 			_ = os.Remove(dest)
