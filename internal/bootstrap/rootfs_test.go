@@ -1485,7 +1485,7 @@ func TestDownloadToolchain_ParallelSuccess(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount.Add(1)
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("content-" + r.URL.Path))
+		_, _ = w.Write([]byte("content-" + r.URL.Path)) //nolint:gosec
 
 	}))
 	defer server.Close()

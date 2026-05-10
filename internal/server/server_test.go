@@ -588,6 +588,11 @@ func TestISOStartBuild(t *testing.T) {
 
 func TestISOStartBuild_AlreadyBuilding(t *testing.T) {
 	s := setupTestServer(t)
+	block := make(chan struct{})
+	s.buildFunc = func(ctx context.Context, cfg manager.BuildConfig, progress chan<- string) error {
+		<-block // blocks until test is ready
+		return nil
+	}
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
@@ -597,7 +602,7 @@ func TestISOStartBuild_AlreadyBuilding(t *testing.T) {
 	resp1, _ := http.DefaultClient.Do(req1)
 	_ = resp1.Body.Close()
 
-	// Try second build (should conflict)
+	// Try second build (should conflict - buildRunning=true)
 	req2, _ := http.NewRequestWithContext(context.Background(), "POST", ts.URL+"/api/iso/build", nil)
 	req2.Header.Set(authHeader())
 	resp2, err := http.DefaultClient.Do(req2)
@@ -609,6 +614,9 @@ func TestISOStartBuild_AlreadyBuilding(t *testing.T) {
 	if resp2.StatusCode != http.StatusConflict {
 		t.Errorf("expected 409 Conflict, got %d", resp2.StatusCode)
 	}
+
+	// Unblock the build goroutine so it can clean up
+	close(block)
 }
 
 func TestAuthMiddleware_MissingToken(t *testing.T) {

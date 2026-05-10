@@ -67,6 +67,7 @@ type Server struct {
 	progress    string
 	progressMu  sync.RWMutex
 	buildRunning bool    // separate flag set before goroutine, cleared after
+	buildFunc    func(ctx context.Context, cfg manager.BuildConfig, progress chan<- string) error
 	sseChannels map[chan SSEEvent]struct{}
 	sseMu       sync.Mutex
 }
@@ -77,6 +78,9 @@ func New(mgr *manager.AgnosticManager, opts ...ServerOption) *Server {
 		mgr:         mgr,
 		mux:         http.NewServeMux(),
 		sseChannels: make(map[chan SSEEvent]struct{}),
+	}
+	s.buildFunc = func(ctx context.Context, cfg manager.BuildConfig, progress chan<- string) error {
+		return s.mgr.Build(ctx, cfg, progress)
 	}
 
 	// Parse templates
@@ -538,7 +542,7 @@ func (s *Server) handleISOStartBuild(w http.ResponseWriter, r *http.Request) {
 		s.broadcast(SSEEvent{Event: "iso:progress", Data: "Starting bootstrap..."})
 		s.broadcast(SSEEvent{Event: "iso:progress", Data: "Building ISO image, please wait..."})
 
-		err := s.mgr.Build(context.Background(), cfg, nil)
+		err := s.buildFunc(context.Background(), cfg, nil)
 
 		if err != nil {
 			s.broadcast(SSEEvent{Event: "iso:error", Data: err.Error()})
