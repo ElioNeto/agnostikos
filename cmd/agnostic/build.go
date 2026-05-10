@@ -75,6 +75,11 @@ The build command executes the full bootstrap pipeline to create a bootable ISO:
   6. Install GRUB bootloader (BIOS or UEFI)
   7. Generate bootable ISO image
 
+Note: Internally, BootstrapAll reports more granular stages (13 steps) that
+break down the toolchain phase (download, binutils, GCC, glibc) and add
+post-GRUB steps (configure shell, mise runtimes, inittab, dotfiles). The
+7-stage summary above is a user-facing simplification.
+
 If a recipe.yaml file is provided as an argument (or via --recipe), its settings
 (kernel version, arch, UEFI) are loaded as defaults. Explicit CLI flags always
 take precedence over recipe values.

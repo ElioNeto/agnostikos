@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **CLI additions** — new commands for complete package lifecycle management:
+  - `agnostic list` — list installed packages across all backends
+  - `agnostic search <query>` — search packages in configured backends
+  - `agnostic remove <package>` — remove an installed package
+  - `agnostic update [package]` — update packages with `--all` and `--dry-run` flags
+  - `agnostic tui` — interactive terminal UI for package search and management
+  - `agnostic serve` — Web UI server for browser-based package management
+  - `agnostic dotfiles` — manage dotfiles via `backup`, `restore`, `sync` subcommands
+  - `agnostic validate <config>` — validate `agnostic.yaml` configuration files
+- **Bootstrap/build unification** — `agnostic build` replaces `agnostic bootstrap` as the primary entry point for ISO generation; `bootstrap` kept for backward compatibility
+- **ARM64 CI with QEMU** — cross-architecture CI pipeline using QEMU user-mode emulation for building and testing ARM64 artifacts on amd64 runners
+- **Isolation tests** — automated headless QEMU boot testing in CI with configurable timeout (300s for TCG emulation)
+- **Man pages** — auto-generated man pages via `cobra/doc`; generated with `make docs` and included in release archives under `docs/man/`
+
+### Changed
+- **Project structure** — new internal packages: `server/`, `tui/`, `dotfiles/` for Web UI, TUI, and dotfile management respectively
+- **Makefile** — added `docs`, `test-minimal-iso-headless`, `test-boot-integration`, `test-boot-integration-uefi`, `package` targets
+
+### Fixed
+- **manager.Build** — fixed build failures in the package manager abstraction layer (#39)
+- **root.go test import** — fixed testing import bug in root command setup (#41)
+
 ## [v0.1.0] - 2026-05-08
 
 ### 🎉 First public release

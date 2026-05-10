@@ -39,6 +39,9 @@ Built from scratch in Go, AgnosticOS is designed for developers who work across 
 **Key features:**
 - 🔀 **Multi-backend dispatch** — Pacman, Nix, and Flatpak, all from one CLI
 - 📋 **Config-driven installs** — declare your packages in `agnostic.yaml`
+- 🔍 **Full lifecycle management** — `agnostic search`, `list`, `install`, `remove`, `update` for complete package management
+- 🖥️ **Terminal UI** — interactive package browser with `agnostic tui`
+- 🌐 **Web UI** — browser-based management with `agnostic serve`
 - 🔒 **Namespace isolation** — optional Linux mount namespace sandboxing
 - 🏗️ **Build pipeline** — full ISO generation: RootFS → toolchain → kernel → busybox → initramfs → GRUB → ISO (BIOS or UEFI)
 - 💿 **ISO builder** — standalone ISO generation from an existing RootFS (`agnostic iso`)
@@ -78,6 +81,38 @@ make build
 **Install from config file:**
 ```bash
 ./build/agnostic install --config agnostic.yaml
+```
+
+**List installed packages:**
+```bash
+./build/agnostic list
+```
+
+**Search for packages:**
+```bash
+./build/agnostic search neovim --backend nix
+```
+
+**Remove a package:**
+```bash
+./build/agnostic remove firefox
+```
+
+**Update packages:**
+```bash
+./build/agnostic update                # update all packages
+./build/agnostic update firefox        # update a specific package
+./build/agnostic update --dry-run      # simulate update without executing
+```
+
+**Launch the TUI:**
+```bash
+./build/agnostic tui
+```
+
+**Start the Web UI server:**
+```bash
+./build/agnostic serve
 ```
 
 ---
@@ -134,11 +169,14 @@ sudo ./build/agnostic build \
 agnostikos/
 ├── cmd/agnostic/          # CLI entry point (Cobra)
 ├── internal/
-│   ├── config/            # YAML config parsing
-│   ├── manager/           # PackageService interface + backends
 │   ├── bootstrap/         # RootFS, kernel, busybox, initramfs, GRUB
+│   ├── config/            # YAML config parsing
+│   ├── dotfiles/          # Dotfile backup/restore/sync
 │   ├── iso/               # ISO builder (xorriso/mkisofs)
-│   └── isolation/         # Linux namespace isolation
+│   ├── isolation/         # Linux namespace isolation
+│   ├── manager/           # PackageService interface + backends
+│   ├── server/            # Web UI server
+│   └── tui/               # Terminal UI (Bubble Tea)
 ├── recipes/               # YAML image definitions (base.yaml)
 ├── scripts/               # QEMU runner, CI helpers
 ├── docs/                  # Architecture & requirements docs
@@ -232,13 +270,13 @@ agnostic install --config agnostic.yaml
 - [x] RootFS generator (FHS + usrmerge)
 - [x] Toolchain download (binutils, gcc, glibc)
 - [x] GRUB installation (BIOS + UEFI, auto ESP mount)
-- [ ] Kernel compilation
-- [ ] Busybox compilation
-- [ ] Initramfs generation
-- [ ] Full LFS bootstrap recipe
-- [ ] QEMU smoke test in CI
-- [ ] `agnostic.yaml` schema validation
-- [ ] Multi-architecture support (ARM64)
+- [x] Kernel compilation
+- [x] Busybox compilation
+- [x] Initramfs generation
+- [x] Full LFS bootstrap recipe
+- [x] QEMU smoke test in CI
+- [x] `agnostic.yaml` schema validation
+- [x] Multi-architecture support (ARM64)
 
 ---
 
