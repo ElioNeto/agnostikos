@@ -225,7 +225,7 @@ func BuildGLibc(ctx context.Context, cfg ToolchainConfig) error {
 	target := toolchainTarget(cfg)
 	jobs := toolchainNumCPUs(cfg)
 	srcDir := sourcesDir(cfg.TargetDir)
-	pkg := "glibc-2.39"
+	pkg := "glibc-2.40"
 	tarball := pkg + ".tar.xz"
 	tarballPath := filepath.Join(srcDir, tarball)
 	srcPath := filepath.Join(srcDir, pkg)
