@@ -242,6 +242,70 @@ agnostic install --config agnostic.yaml
 
 ---
 
+## 🚀 Post-Boot Flow
+
+After booting a custom AgnosticOS ISO, the system starts with **busybox init** as the PID 1 process.
+
+### Init system
+
+The kernel launches `/init` which is a symlink to busybox's `/sbin/init`. The init process reads `/etc/inittab` to determine what to run:
+
+```
+::sysinit:/etc/init.d/rcS       →  system initialization
+::ctrlaltdel:/sbin/reboot       →  Ctrl+Alt+Del handling
+::shutdown:/sbin/swapoff -a     →  swap teardown
+::shutdown:/bin/umount -a -r    →  filesystem unmount
+```
+
+The boot script `/etc/init.d/rcS` mounts virtual filesystems, sets up device nodes via `mdev`, and configures the hostname.
+
+### Login
+
+- **Auto-login mode (default for live sessions):** If `AutoLoginUser` is set in the bootstrap config, the configured user is automatically logged in on `tty1` via `/bin/login -f <user>`.
+- **Manual login mode:** When no auto-login user is configured, `init` presents a login prompt on the console (`::askfirst:-/bin/sh`). The default credentials depend on the contents of `/etc/passwd` and `/etc/shadow` in the rootfs.
+
+### Available commands
+
+Once logged in, the following `agnostic` commands are available:
+
+| Command                       | Description                                      |
+|-------------------------------|--------------------------------------------------|
+| `agnostic tui`                | Launch the interactive terminal UI (TUI)         |
+| `agnostic install <package>`  | Install a package via the default backend        |
+| `agnostic install --config <file>` | Install packages declared in a YAML config  |
+| `agnostic list`               | List installed packages across all backends      |
+| `agnostic search <query>`     | Search for packages in configured backends       |
+| `agnostic remove <package>`   | Remove an installed package                      |
+| `agnostic backend list`       | Show available backends (pacman, nix, flatpak)   |
+
+### Package installation
+
+```bash
+# Install a single package using the default backend
+agnostic install firefox
+
+# Install using a specific backend
+agnostic install firefox --backend flatpak
+
+# Install from a declarative config file
+agnostic install --config /etc/agnostic.yaml
+```
+
+### Building a custom ISO
+
+```bash
+# Full pipeline: RootFS → toolchain → kernel → busybox → initramfs → GRUB → ISO
+sudo make build ARGS="--output /tmp/custom.iso"
+
+# Quick build (skip toolchain, use cached artifacts)
+sudo make build ARGS="--skip-toolchain --output /tmp/custom.iso"
+
+# Build with a recipe file
+./build/agnostic build recipes/base.yaml
+```
+
+---
+
 ## ⬇️ Download
 
 Pre-built binaries for Linux (amd64 and arm64) are available on the

@@ -723,10 +723,33 @@ func TestBootstrapAll_AutoLoginAndMise(t *testing.T) {
 		t.Fatalf("BootstrapAll with autologin+mise failed: %v", err)
 	}
 
-	// Verify autologin drop-in was created
-	dropinPath := filepath.Join(rootfsDir, "etc", "systemd", "system", "getty@tty1.service.d", "autologin.conf")
-	if _, err := os.Stat(dropinPath); os.IsNotExist(err) {
-		t.Error("autologin drop-in should exist")
+	// Verify busybox inittab was created with auto-login
+	inittabPath := filepath.Join(rootfsDir, "etc", "inittab")
+	inittabData, err := os.ReadFile(inittabPath)
+	if err != nil {
+		t.Fatalf("expected /etc/inittab to exist: %v", err)
+	}
+	if !strings.Contains(string(inittabData), "/bin/login -f root") {
+		t.Errorf("inittab should contain auto-login for root, got: %s", string(inittabData))
+	}
+	if !strings.Contains(string(inittabData), "::sysinit:/etc/init.d/rcS") {
+		t.Errorf("inittab should contain sysinit directive, got: %s", string(inittabData))
+	}
+
+	// Verify rcS boot script was created
+	rcSPath := filepath.Join(rootfsDir, "etc", "init.d", "rcS")
+	rcSData, err := os.ReadFile(rcSPath)
+	if err != nil {
+		t.Fatalf("expected /etc/init.d/rcS to exist: %v", err)
+	}
+	if !strings.Contains(string(rcSData), "hostname agnostikos") {
+		t.Errorf("rcS should set hostname, got: %s", string(rcSData))
+	}
+
+	// Verify rcS is executable
+	rcSInfo, err := os.Stat(rcSPath)
+	if err == nil && rcSInfo.Mode().Perm() != 0755 {
+		t.Errorf("rcS should be 0755, got: %o", rcSInfo.Mode().Perm())
 	}
 
 	// Verify mise profile script was created

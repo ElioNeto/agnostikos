@@ -323,9 +323,110 @@ func hasShellEntry(content, shell string) bool {
 	return false
 }
 
+// configureInittab configura o sistema de init baseado em busybox.
+// Escreve /etc/inittab com regras de boot, reboot, shutdown e login,
+// e /etc/init.d/rcS com comandos de inicialização do sistema.
+// Se autoLoginUser não for vazio, configura autologin no tty1;
+// caso contrário, usa askfirst no console para prompt de login manual.
+func configureInittab(rootfsDir, autoLoginUser string) error {
+	// 1. Garantir que /etc existe
+	etcDir := filepath.Join(rootfsDir, "etc")
+	if err := os.MkdirAll(etcDir, 0755); err != nil {
+		return fmt.Errorf("mkdir /etc: %w", err)
+	}
+
+	// 2. Escrever /etc/inittab
+	var inittabLines []string
+	inittabLines = append(inittabLines,
+		"::sysinit:/etc/init.d/rcS",
+		"::ctrlaltdel:/sbin/reboot",
+		"::shutdown:/sbin/swapoff -a",
+		"::shutdown:/bin/umount -a -r",
+	)
+
+	if autoLoginUser != "" {
+		// Autologin no tty1
+		inittabLines = append(inittabLines,
+			fmt.Sprintf("tty1::respawn:/bin/login -f %s", autoLoginUser),
+		)
+	} else {
+		// Prompt de login manual no console serial/primeiro terminal
+		inittabLines = append(inittabLines,
+			"::askfirst:-/bin/sh",
+		)
+	}
+
+	inittabContent := strings.Join(inittabLines, "\n") + "\n"
+	inittabPath := filepath.Join(etcDir, "inittab")
+	if err := os.WriteFile(inittabPath, []byte(inittabContent), 0644); err != nil {
+		return fmt.Errorf("write /etc/inittab: %w", err)
+	}
+	fmt.Printf("[inittab] wrote /etc/inittab (autoLogin=%q)\n", autoLoginUser)
+
+	// 3. Criar /etc/init.d e escrever /etc/init.d/rcS
+	initdDir := filepath.Join(etcDir, "init.d")
+	if err := os.MkdirAll(initdDir, 0755); err != nil {
+		return fmt.Errorf("mkdir /etc/init.d: %w", err)
+	}
+
+	rcSContent := `#!/bin/sh
+# rcS — boot script for busybox init
+mount -t proc none /proc
+mount -t sysfs none /sys
+mount -t tmpfs none /tmp
+mkdir -p /dev/pts
+mount -t devpts none /dev/pts
+echo /sbin/mdev > /proc/sys/kernel/hotplug
+mdev -s
+hostname agnostikos
+`
+	rcSPath := filepath.Join(initdDir, "rcS")
+	if err := os.WriteFile(rcSPath, []byte(rcSContent), 0755); err != nil {
+		return fmt.Errorf("write /etc/init.d/rcS: %w", err)
+	}
+	// Tornar executável (já definido no WriteFile com 0755, mas garantimos)
+	if err := os.Chmod(rcSPath, 0755); err != nil {
+		return fmt.Errorf("chmod rcS: %w", err)
+	}
+	fmt.Printf("[inittab] wrote /etc/init.d/rcS\n")
+
+	// 4. Garantir que /init existe como symlink para /sbin/init (busybox init)
+	initPath := filepath.Join(rootfsDir, "init")
+	if _, err := os.Lstat(initPath); os.IsNotExist(err) {
+		sbinInit := filepath.Join(rootfsDir, "sbin", "init")
+		// Se /sbin/init existir, cria symlink
+		if _, statErr := os.Stat(sbinInit); statErr == nil {
+			if err := os.Symlink("/sbin/init", initPath); err != nil {
+				return fmt.Errorf("symlink /init -> /sbin/init: %w", err)
+			}
+			fmt.Printf("[inittab] created /init symlink -> /sbin/init\n")
+		} else {
+			// Tenta criar symlink para busybox diretamente
+			busyboxBin := filepath.Join(rootfsDir, "bin", "busybox")
+			if _, statErr2 := os.Stat(busyboxBin); statErr2 == nil {
+				if err := os.Symlink("/bin/busybox", initPath); err != nil {
+					return fmt.Errorf("symlink /init -> /bin/busybox: %w", err)
+				}
+				fmt.Printf("[inittab] created /init symlink -> /bin/busybox\n")
+			} else {
+				fmt.Printf("[inittab] warn: no /sbin/init or /bin/busybox found, /init not created\n")
+			}
+		}
+	} else if err != nil {
+		return fmt.Errorf("stat /init: %w", err)
+	} else {
+		fmt.Printf("[inittab] /init already exists\n")
+	}
+
+	return nil
+}
+
 // configureAutologin configura o autologin automático no tty1 via systemd getty.
 // Cria um drop-in em /etc/systemd/system/getty@tty1.service.d/autologin.conf
 // com ExecStart apontando para agetty --autologin <username>.
+//
+// Deprecated: use configureInittab() for busybox-based init. This function
+// is systemd-only and kept for backward compatibility.
 func configureAutologin(rootfsDir, username string) error {
 	if username == "" {
 		return nil
@@ -559,14 +660,10 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 		fmt.Println("\n=== Step 11/13: Setup Mise Runtimes (skipped) ===")
 	}
 
-	// Step 12: Configure autologin (optional)
-	if cfg.AutoLoginUser != "" {
-		fmt.Println("\n=== Step 12/13: Configure Autologin ===")
-		if err := configureAutologin(cfg.TargetDir, cfg.AutoLoginUser); err != nil {
-			return fmt.Errorf("configure autologin: %w", err)
-		}
-	} else {
-		fmt.Println("\n=== Step 12/13: Configure Autologin (skipped) ===")
+	// Step 12: Configure init system (busybox init with inittab)
+	fmt.Println("\n=== Step 12/13: Configure Init System (busybox inittab) ===")
+	if err := configureInittab(cfg.TargetDir, cfg.AutoLoginUser); err != nil {
+		return fmt.Errorf("configure inittab: %w", err)
 	}
 
 	// Step 13: Apply dotfiles (optional)

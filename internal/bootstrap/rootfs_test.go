@@ -311,6 +311,195 @@ func TestHasShellEntry(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// configureInittab
+// ---------------------------------------------------------------------------
+
+func TestConfigureInittab(t *testing.T) {
+	tests := []struct {
+		name          string
+		autoLoginUser string
+		wantErr       bool
+		checkInittab  func(t *testing.T, data string)
+		checkRcS      func(t *testing.T, data string)
+	}{
+		{
+			name:          "default inittab without auto-login uses askfirst",
+			autoLoginUser: "",
+			wantErr:       false,
+			checkInittab: func(t *testing.T, data string) {
+				if !strings.Contains(data, "::askfirst:-/bin/sh") {
+					t.Errorf("inittab should contain askfirst for manual login, got: %s", data)
+				}
+				if strings.Contains(data, "/bin/login -f") {
+					t.Errorf("inittab should NOT contain auto-login when no user specified")
+				}
+			},
+			checkRcS: nil,
+		},
+		{
+			name:          "auto-login inittab with root user",
+			autoLoginUser: "root",
+			wantErr:       false,
+			checkInittab: func(t *testing.T, data string) {
+				if !strings.Contains(data, "/bin/login -f root") {
+					t.Errorf("inittab should contain auto-login for root, got: %s", data)
+				}
+				if strings.Contains(data, "::askfirst:-/bin/sh") {
+					t.Errorf("inittab should NOT contain askfirst when auto-login is configured")
+				}
+				if !strings.Contains(data, "tty1::respawn:") {
+					t.Errorf("inittab should bind auto-login to tty1")
+				}
+			},
+			checkRcS: nil,
+		},
+		{
+			name:          "non-root auto-login user",
+			autoLoginUser: "admin",
+			wantErr:       false,
+			checkInittab: func(t *testing.T, data string) {
+				if !strings.Contains(data, "/bin/login -f admin") {
+					t.Errorf("inittab should contain auto-login for admin, got: %s", data)
+				}
+			},
+			checkRcS: nil,
+		},
+		{
+			name:          "rcS contains boot commands",
+			autoLoginUser: "",
+			wantErr:       false,
+			checkInittab:  nil,
+			checkRcS: func(t *testing.T, data string) {
+				expected := []string{
+					"mount -t proc",
+					"mount -t sysfs",
+					"mount -t tmpfs",
+					"mkdir -p /dev/pts",
+					"mount -t devpts",
+					"echo /sbin/mdev",
+					"mdev -s",
+					"hostname agnostikos",
+				}
+				for _, exp := range expected {
+					if !strings.Contains(data, exp) {
+						t.Errorf("rcS should contain %q, got: %s", exp, data)
+					}
+				}
+			},
+		},
+		{
+			name:          "inittab has sysinit, ctrlaltdel, shutdown entries",
+			autoLoginUser: "testuser",
+			wantErr:       false,
+			checkInittab: func(t *testing.T, data string) {
+				for _, entry := range []string{"::sysinit:", "::ctrlaltdel:", "::shutdown:"} {
+					if !strings.Contains(data, entry) {
+						t.Errorf("inittab should contain %q, got: %s", entry, data)
+					}
+				}
+			},
+			checkRcS: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmp := t.TempDir()
+
+			err := configureInittab(tmp, tt.autoLoginUser)
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error but got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if err != nil {
+				return
+			}
+
+			// Verify /etc/inittab exists
+			inittabPath := filepath.Join(tmp, "etc", "inittab")
+			inittabData, err := os.ReadFile(inittabPath)
+			if err != nil {
+				t.Fatalf("expected /etc/inittab to exist: %v", err)
+			}
+
+			// Verify /etc/init.d/rcS exists
+			rcSPath := filepath.Join(tmp, "etc", "init.d", "rcS")
+			rcSData, err := os.ReadFile(rcSPath)
+			if err != nil {
+				t.Fatalf("expected /etc/init.d/rcS to exist: %v", err)
+			}
+
+			// Run custom checks
+			if tt.checkInittab != nil {
+				tt.checkInittab(t, string(inittabData))
+			}
+			if tt.checkRcS != nil {
+				tt.checkRcS(t, string(rcSData))
+			}
+		})
+	}
+}
+
+func TestConfigureInittab_RcSExecutable(t *testing.T) {
+	tmp := t.TempDir()
+
+	err := configureInittab(tmp, "")
+	if err != nil {
+		t.Fatalf("configureInittab failed: %v", err)
+	}
+
+	rcSPath := filepath.Join(tmp, "etc", "init.d", "rcS")
+	info, err := os.Stat(rcSPath)
+	if err != nil {
+		t.Fatalf("expected rcS to exist: %v", err)
+	}
+	if info.Mode().Perm() != 0755 {
+		t.Errorf("rcS permissions should be 0755, got: %o", info.Mode().Perm())
+	}
+}
+
+func TestConfigureInittab_MkdirError(t *testing.T) {
+	tmp := t.TempDir()
+
+	// Make /etc a file so MkdirAll on /etc/init.d fails
+	etcPath := filepath.Join(tmp, "etc")
+	if err := os.MkdirAll(filepath.Dir(etcPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(etcPath, []byte("not-a-directory"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := configureInittab(tmp, "root")
+	if err == nil {
+		t.Fatal("expected error when /etc is a file")
+	}
+	if !strings.Contains(err.Error(), "mkdir /etc") {
+		t.Errorf("expected 'mkdir /etc' error, got: %v", err)
+	}
+}
+
+func TestConfigureInittab_WriteInittabError(t *testing.T) {
+	tmp := t.TempDir()
+
+	// Create /etc as a file so writing /etc/inittab fails
+	etcPath := filepath.Join(tmp, "etc")
+	if err := os.MkdirAll(filepath.Dir(etcPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(etcPath, []byte("not-a-directory"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := configureInittab(tmp, "")
+	if err == nil {
+		t.Fatal("expected error when /etc is a file")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // configureAutologin
 // ---------------------------------------------------------------------------
 
