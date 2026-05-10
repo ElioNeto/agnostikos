@@ -10,7 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestResolveTarget_Arg(t *testing.T) {
@@ -91,7 +94,7 @@ func TestDownloadToolchain_SkipsExisting(t *testing.T) {
 	}
 
 	// como todos já existem, não deve tentar baixar nada (sem rede)
-	if err := DownloadToolchain(rootfsDir); err != nil {
+	if err := DownloadToolchain(context.Background(), rootfsDir, 0); err != nil {
 		t.Errorf("expected no error when files exist, got: %v", err)
 	}
 }
@@ -786,7 +789,7 @@ func TestDownloadFile_Success(t *testing.T) {
 	tmp := t.TempDir()
 	dest := filepath.Join(tmp, "downloaded")
 
-	err := downloadFile(dest, server.URL, "")
+	err := downloadFile(context.Background(), dest, server.URL, "")
 	if err != nil {
 		t.Fatalf("downloadFile failed: %v", err)
 	}
@@ -819,7 +822,7 @@ func TestDownloadFile_CreateFileError(t *testing.T) {
 	tmp := t.TempDir()
 	dest := filepath.Join(tmp, "nonexistent", "file")
 
-	err := downloadFile(dest, server.URL, "")
+	err := downloadFile(context.Background(), dest, server.URL, "")
 	if err == nil {
 		t.Fatal("expected error when dest directory does not exist")
 	}
@@ -842,7 +845,7 @@ func TestDownloadFile_HTTPError(t *testing.T) {
 	tmp := t.TempDir()
 	dest := filepath.Join(tmp, "downloaded")
 
-	err := downloadFile(dest, server.URL, "")
+	err := downloadFile(context.Background(), dest, server.URL, "")
 	if err == nil {
 		t.Fatal("expected error for HTTP 404")
 	}
@@ -895,7 +898,7 @@ func TestDownloadFile_IOCopyError(t *testing.T) {
 	tmp := t.TempDir()
 	dest := filepath.Join(tmp, "downloaded")
 
-	err := downloadFile(dest, "http://example.com/file", "")
+	err := downloadFile(context.Background(), dest, "http://example.com/file", "")
 	if err == nil {
 		t.Fatal("expected error from io.Copy failure")
 	}
@@ -1155,7 +1158,7 @@ func TestDownloadFile_SHA256Verification(t *testing.T) {
 	tmp := t.TempDir()
 	dest := filepath.Join(tmp, "verified")
 
-	err := downloadFile(dest, server.URL, expectedHash)
+	err := downloadFile(context.Background(), dest, server.URL, expectedHash)
 	if err != nil {
 		t.Fatalf("downloadFile with valid SHA256 failed: %v", err)
 	}
@@ -1187,7 +1190,7 @@ func TestDownloadFile_SHA256MismatchRemovesFile(t *testing.T) {
 	tmp := t.TempDir()
 	dest := filepath.Join(tmp, "corrupt")
 
-	err := downloadFile(dest, server.URL, "0000000000000000000000000000000000000000000000000000000000000000")
+	err := downloadFile(context.Background(), dest, server.URL, "0000000000000000000000000000000000000000000000000000000000000000")
 	if err == nil {
 		t.Fatal("expected error for SHA256 mismatch")
 	}
@@ -1220,7 +1223,7 @@ func TestDownloadFile_SHA256EmptySkipsVerification(t *testing.T) {
 	dest := filepath.Join(tmp, "no-verify")
 
 	// Empty SHA256 should not trigger verification
-	err := downloadFile(dest, server.URL, "")
+	err := downloadFile(context.Background(), dest, server.URL, "")
 	if err != nil {
 		t.Fatalf("downloadFile with empty SHA256 failed: %v", err)
 	}
@@ -1245,7 +1248,7 @@ func TestDownloadFile_VerifyAtRuntimePlaceholderSkipsVerification(t *testing.T) 
 	dest := filepath.Join(tmp, "placeholder")
 
 	// "verify_at_runtime" placeholder should not trigger verification
-	err := downloadFile(dest, server.URL, "verify_at_runtime")
+	err := downloadFile(context.Background(), dest, server.URL, "verify_at_runtime")
 	if err != nil {
 		t.Fatalf("downloadFile with verify_at_runtime failed: %v", err)
 	}
@@ -1257,7 +1260,7 @@ func TestDownloadFile_VerifyAtRuntimePlaceholderSkipsVerification(t *testing.T) 
 
 func TestDownloadFile_HTTPSEnforcement(t *testing.T) {
 	// enforceHTTPS is true by default
-	err := downloadFile("/tmp/dummy", "http://example.com/file", "")
+	err := downloadFile(context.Background(), "/tmp/dummy", "http://example.com/file", "")
 	if err == nil {
 		t.Fatal("expected error when HTTPS is enforced but URL is HTTP")
 	}
@@ -1288,7 +1291,7 @@ func TestDownloadFile_HTTPSEnforcementAllowsHTTPS(t *testing.T) {
 	// This test is about verifying the allower does work — we disable enforcement
 	// but the URL passed is from the server which is HTTP. We test the logic
 	// by verifying that when enforcement is false, HTTP works.
-	err := downloadFile(dest, server.URL, "")
+	err := downloadFile(context.Background(), dest, server.URL, "")
 	if err != nil {
 		t.Errorf("downloadFile should work when HTTPS enforcement is disabled: %v", err)
 	}
@@ -1313,5 +1316,239 @@ func TestDefaultToolchain_HasSHA256Field(t *testing.T) {
 		if pkg.SHA256 == "" {
 			t.Errorf("toolchain package %s has empty SHA256 — set a real hash or use 'verify_at_runtime'", pkg.Name)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// parseMaxConcurrent
+// ---------------------------------------------------------------------------
+
+func TestParseMaxConcurrent_Defaults(t *testing.T) {
+	tests := []struct {
+		name string
+		jobs string
+		want int
+	}{
+		{name: "empty defaults to 3", jobs: "", want: 3},
+		{name: "invalid string defaults to 3", jobs: "abc", want: 3},
+		{name: "zero defaults to 3", jobs: "0", want: 3},
+		{name: "negative defaults to 3", jobs: "-1", want: 3},
+		{name: "valid value 1", jobs: "1", want: 1},
+		{name: "valid value 4", jobs: "4", want: 4},
+		{name: "capped at 10", jobs: "20", want: 10},
+		{name: "exactly 10", jobs: "10", want: 10},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseMaxConcurrent(tt.jobs)
+			if got != tt.want {
+				t.Errorf("parseMaxConcurrent(%q) = %d; want %d", tt.jobs, got, tt.want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Parallel download tests
+// ---------------------------------------------------------------------------
+
+func TestDownloadToolchain_ParallelSuccess(t *testing.T) {
+	// Start a test server that serves multiple packages successfully.
+	callCount := atomic.Int32{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount.Add(1)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("content-" + r.URL.Path))
+	}))
+	defer server.Close()
+
+	origHTTP := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() { httpClient = origHTTP })
+
+	origEnforce := enforceHTTPS
+	enforceHTTPS = false
+	t.Cleanup(func() { enforceHTTPS = origEnforce })
+
+	origToolchain := DefaultToolchain
+	DefaultToolchain = []ToolchainPackage{
+		{Name: "pkg-a", URL: server.URL + "/pkg-a.tar.xz"},
+		{Name: "pkg-b", URL: server.URL + "/pkg-b.tar.xz"},
+		{Name: "pkg-c", URL: server.URL + "/pkg-c.tar.xz"},
+	}
+	t.Cleanup(func() { DefaultToolchain = origToolchain })
+
+	tmpDir := t.TempDir()
+	rootfsDir := filepath.Join(tmpDir, "rootfs")
+	if err := os.MkdirAll(rootfsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	err := DownloadToolchain(context.Background(), rootfsDir, 3)
+	if err != nil {
+		t.Fatalf("parallel download failed: %v", err)
+	}
+
+	// All 3 packages should have been downloaded.
+	if callCount.Load() != 3 {
+		t.Errorf("expected 3 HTTP calls, got %d", callCount.Load())
+	}
+
+	srcDir := filepath.Join(tmpDir, "sources")
+	for _, pkg := range DefaultToolchain {
+		dest := filepath.Join(srcDir, pkg.Name+".tar.xz")
+		if _, err := os.Stat(dest); os.IsNotExist(err) {
+			t.Errorf("expected downloaded file %s to exist", dest)
+		}
+	}
+}
+
+func TestDownloadToolchain_ErrorPropagation(t *testing.T) {
+	// Server returns 500 for the second package.
+	callCount := atomic.Int32{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := callCount.Add(1)
+		if n == 2 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("content"))
+	}))
+	defer server.Close()
+
+	origHTTP := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() { httpClient = origHTTP })
+
+	origEnforce := enforceHTTPS
+	enforceHTTPS = false
+	t.Cleanup(func() { enforceHTTPS = origEnforce })
+
+	origToolchain := DefaultToolchain
+	DefaultToolchain = []ToolchainPackage{
+		{Name: "pkg-a", URL: server.URL + "/pkg-a.tar.xz"},
+		{Name: "pkg-b", URL: server.URL + "/pkg-b.tar.xz"}, // will fail
+		{Name: "pkg-c", URL: server.URL + "/pkg-c.tar.xz"},
+	}
+	t.Cleanup(func() { DefaultToolchain = origToolchain })
+
+	tmpDir := t.TempDir()
+	rootfsDir := filepath.Join(tmpDir, "rootfs")
+	if err := os.MkdirAll(rootfsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	err := DownloadToolchain(context.Background(), rootfsDir, 3)
+	if err == nil {
+		t.Fatal("expected error due to server 500, got nil")
+	}
+	if !strings.Contains(err.Error(), "download pkg-b") {
+		t.Errorf("expected error message to mention 'download pkg-b', got: %v", err)
+	}
+}
+
+func TestDownloadToolchain_ContextCancellation(t *testing.T) {
+	// Server that stalls to let context cancellation happen.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Block until context is cancelled.
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+
+	origHTTP := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() { httpClient = origHTTP })
+
+	origEnforce := enforceHTTPS
+	enforceHTTPS = false
+	t.Cleanup(func() { enforceHTTPS = origEnforce })
+
+	origToolchain := DefaultToolchain
+	DefaultToolchain = []ToolchainPackage{
+		{Name: "pkg-a", URL: server.URL + "/pkg-a.tar.xz"},
+		{Name: "pkg-b", URL: server.URL + "/pkg-b.tar.xz"},
+	}
+	t.Cleanup(func() { DefaultToolchain = origToolchain })
+
+	tmpDir := t.TempDir()
+	rootfsDir := filepath.Join(tmpDir, "rootfs")
+	if err := os.MkdirAll(rootfsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	err := DownloadToolchain(ctx, rootfsDir, 3)
+	if err == nil {
+		t.Fatal("expected context cancellation error, got nil")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled error, got: %v", err)
+	}
+}
+
+func TestDownloadToolchain_ConcurrencyLimit(t *testing.T) {
+	// Server that introduces a small delay to observe concurrency.
+	var mu sync.Mutex
+	active := 0
+	maxActive := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		active++
+		if active > maxActive {
+			maxActive = active
+		}
+		mu.Unlock()
+
+		// Simulate a slow download.
+		time.Sleep(50 * time.Millisecond)
+
+		mu.Lock()
+		active--
+		mu.Unlock()
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("content"))
+	}))
+	defer server.Close()
+
+	origHTTP := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() { httpClient = origHTTP })
+
+	origEnforce := enforceHTTPS
+	enforceHTTPS = false
+	t.Cleanup(func() { enforceHTTPS = origEnforce })
+
+	origToolchain := DefaultToolchain
+	DefaultToolchain = []ToolchainPackage{
+		{Name: "pkg-a", URL: server.URL + "/pkg-a.tar.xz"},
+		{Name: "pkg-b", URL: server.URL + "/pkg-b.tar.xz"},
+		{Name: "pkg-c", URL: server.URL + "/pkg-c.tar.xz"},
+		{Name: "pkg-d", URL: server.URL + "/pkg-d.tar.xz"},
+		{Name: "pkg-e", URL: server.URL + "/pkg-e.tar.xz"},
+	}
+	t.Cleanup(func() { DefaultToolchain = origToolchain })
+
+	tmpDir := t.TempDir()
+	rootfsDir := filepath.Join(tmpDir, "rootfs")
+	if err := os.MkdirAll(rootfsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Limit concurrency to 2.
+	err := DownloadToolchain(context.Background(), rootfsDir, 2)
+	if err != nil {
+		t.Fatalf("parallel download failed: %v", err)
+	}
+
+	if maxActive > 2 {
+		t.Errorf("expected max 2 concurrent downloads, got %d", maxActive)
+	}
+	if maxActive < 2 {
+		t.Errorf("expected concurrency limit of 2 to be reached, got max %d", maxActive)
 	}
 }

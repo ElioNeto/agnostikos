@@ -11,9 +11,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/ElioNeto/agnostikos/internal/dotfiles"
+	"golang.org/x/sync/errgroup"
 )
 
 // BaseDir é o diretório raiz de todo o ambiente AgnosticOS.
@@ -130,26 +133,74 @@ func CreateRootFS(target string) error {
 	return mountVirtualFS(target)
 }
 
+// progressTracker tracks download progress across parallel downloads.
+type progressTracker struct {
+	mu       sync.Mutex
+	total    int
+	done     int
+}
+
+func (p *progressTracker) addDone(name string) {
+	p.mu.Lock()
+	p.done++
+	done := p.done
+	total := p.total
+	p.mu.Unlock()
+	fmt.Printf("[toolchain] ✓ %s (%d/%d)\n", name, done, total)
+}
+
 // DownloadToolchain baixa os pacotes da toolchain para /mnt/data/agnostikOS/sources
-func DownloadToolchain(rootfsDir string) error {
+// em paralelo, respeitando o limite de concorrência maxConcurrent (padrão 3).
+func DownloadToolchain(ctx context.Context, rootfsDir string, maxConcurrent int) error {
 	rootfsDir = resolveTarget(rootfsDir)
 	src := sourcesDir(rootfsDir)
 	if err := os.MkdirAll(src, 0755); err != nil {
 		return fmt.Errorf("mkdir sources: %w", err)
 	}
+
+	if maxConcurrent <= 0 {
+		maxConcurrent = 3
+	}
+
+	sem := make(chan struct{}, maxConcurrent)
+	g, ctx := errgroup.WithContext(ctx)
+
+	// Count packages that actually need downloading for progress tracking.
+	var toDownload []ToolchainPackage
 	for _, pkg := range DefaultToolchain {
 		dest := filepath.Join(src, filepath.Base(pkg.URL))
 		if _, err := os.Stat(dest); err == nil {
 			fmt.Printf("[toolchain] already exists: %s\n", pkg.Name)
 			continue
 		}
-		fmt.Printf("[toolchain] downloading %s...\n", pkg.Name)
-		if err := downloadFile(dest, pkg.URL, pkg.SHA256); err != nil {
-			return fmt.Errorf("download %s: %w", pkg.Name, err)
-		}
-		fmt.Printf("[toolchain] downloaded %s\n", pkg.Name)
+		toDownload = append(toDownload, pkg)
 	}
-	return nil
+
+	progress := &progressTracker{total: len(toDownload)}
+
+	for _, pkg := range toDownload {
+		pkg := pkg
+		dest := filepath.Join(src, filepath.Base(pkg.URL))
+
+		g.Go(func() error {
+			// Acquire semaphore (respect context cancellation).
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			defer func() { <-sem }()
+
+			fmt.Printf("[toolchain] downloading %s...\n", pkg.Name)
+			if err := downloadFile(ctx, dest, pkg.URL, pkg.SHA256); err != nil {
+				return fmt.Errorf("download %s: %w", pkg.Name, err)
+			}
+			progress.addDone(pkg.Name)
+			return nil
+		})
+	}
+
+	return g.Wait()
 }
 
 // httpClient is a variable so tests can replace it with a mock.
@@ -182,12 +233,12 @@ func verifySHA256(filePath, expectedHex string) error {
 // downloadFile faz o download de uma URL para um arquivo local.
 // Se expectedSHA256 for preenchido (e diferente de "verify_at_runtime"),
 // verifica a integridade após o download e remove o arquivo em caso de falha.
-func downloadFile(dest, url, expectedSHA256 string) error {
+func downloadFile(ctx context.Context, dest, url, expectedSHA256 string) error {
 	if enforceHTTPS && !strings.HasPrefix(url, "https://") {
 		return fmt.Errorf("HTTPS required for download: %s", url)
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
@@ -542,6 +593,22 @@ fi
 	}
 }
 
+// parseMaxConcurrent converte a string Jobs do BootstrapConfig em número de
+// downloads paralelos. Retorna 3 como padrão quando a string é vazia ou inválida.
+func parseMaxConcurrent(jobs string) int {
+	if jobs == "" {
+		return 3
+	}
+	n, err := strconv.Atoi(jobs)
+	if err != nil || n <= 0 {
+		return 3
+	}
+	if n > 10 {
+		n = 10 // cap at 10 to avoid saturating the network link
+	}
+	return n
+}
+
 // BootstrapAll executa o pipeline completo de construção do RootFS
 func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	if cfg.TargetDir == "" {
@@ -567,10 +634,11 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 		NumCPUs:   cfg.Jobs,
 	}
 
-	// Step 2: Toolchain — download dos tarballs
+	// Step 2: Toolchain — download dos tarballs (paralelo, max 3 por padrão)
 	if !cfg.SkipToolchain {
 		fmt.Println("\n=== Step 2/14: Download Toolchain ===")
-		if err := DownloadToolchain(cfg.TargetDir); err != nil {
+		maxConc := parseMaxConcurrent(cfg.Jobs)
+		if err := DownloadToolchain(ctx, cfg.TargetDir, maxConc); err != nil {
 			return fmt.Errorf("download toolchain: %w", err)
 		}
 	} else {

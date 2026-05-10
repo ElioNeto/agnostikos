@@ -525,7 +525,7 @@ func TestDownloadToolchain_Download(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := DownloadToolchain(rootfsDir)
+	err := DownloadToolchain(context.Background(), rootfsDir, 0)
 	if err != nil {
 		t.Fatalf("DownloadToolchain failed: %v", err)
 	}
@@ -561,7 +561,7 @@ func TestDownloadToolchain_AlreadyExists(t *testing.T) {
 	t.Cleanup(func() { DefaultToolchain = origToolchain })
 
 	// Should skip download (file exists) and not hit the network
-	err := DownloadToolchain(rootfsDir)
+	err := DownloadToolchain(context.Background(), rootfsDir, 0)
 	if err != nil {
 		t.Errorf("expected no error when file exists, got: %v", err)
 	}
