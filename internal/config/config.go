@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -32,6 +33,19 @@ var localeRegex = regexp.MustCompile(`^[a-z]{2}_[A-Z]{2}\.[a-zA-Z0-9._-]+$`)
 // ou nomes simples como "UTC", "CET", "EST5EDT"
 var timezoneRegex = regexp.MustCompile(`^[A-Za-z_]+(/[A-Za-z_]+)?$`)
 
+// CacheConfig holds configuration for the package metadata cache.
+type CacheConfig struct {
+	// Dir is the directory for disk cache storage.
+	// If empty, defaults to ~/.cache/agnostikos.
+	Dir string `yaml:"cache_dir,omitempty"`
+	// StableTTL is the TTL for "stable" version policy cache entries.
+	// Default is 24 hours.
+	StableTTL time.Duration `yaml:"stable_cache_ttl,omitempty"`
+	// LatestTTL is the TTL for "latest" version policy cache entries.
+	// Default is 1 hour.
+	LatestTTL time.Duration `yaml:"latest_cache_ttl,omitempty"`
+}
+
 // Config represents the agnostic.yaml configuration structure.
 type Config struct {
 	Version  string `yaml:"version"`
@@ -45,18 +59,30 @@ type Config struct {
 		Desktop []string `yaml:"desktop"`
 	} `yaml:"packages"`
 	Backends struct {
-		Default        string   `yaml:"default"`
-		Fallback       string   `yaml:"fallback"`
-		Priority       []string `yaml:"priority"`
-		Version        string   `yaml:"version"`
-		FallbackEnabled bool    `yaml:"fallback_enabled"`
+		Default         string   `yaml:"default"`
+		Fallback        string   `yaml:"fallback"`
+		Priority        []string `yaml:"priority"`
+		Version         string   `yaml:"version"`
+		FallbackEnabled bool     `yaml:"fallback_enabled"`
 	} `yaml:"backends"`
 	User struct {
 		Name   string   `yaml:"name"`
 		Shell  string   `yaml:"shell"`
 		Groups []string `yaml:"groups"`
 	} `yaml:"user"`
-	Dotfiles *DotfilesConfig `yaml:"dotfiles,omitempty"`
+	Dotfiles        *DotfilesConfig `yaml:"dotfiles,omitempty"`
+	PackagePolicies []PackagePolicy `yaml:"package_policies,omitempty"`
+	Cache           CacheConfig     `yaml:"cache,omitempty"`
+}
+
+// PackagePolicy defines a per-package version policy override.
+type PackagePolicy struct {
+	// Name is the package name this policy applies to.
+	Name string `yaml:"name"`
+	// Version is the policy: "latest", "stable", "pinned", or empty (inherit global).
+	Version string `yaml:"version"`
+	// Pin is the exact version to pin when Version is "pinned" (e.g. "1.2.3").
+	Pin string `yaml:"pin"`
 }
 
 // DotfilesConfig configura o gerenciamento de dotfiles.
@@ -187,8 +213,51 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// PackagePolicies (optional, validate entries)
+	for i, pp := range c.PackagePolicies {
+		if pp.Name == "" {
+			errs = append(errs, fmt.Sprintf("package_policies[%d].name is required", i))
+		}
+		switch pp.Version {
+		case "", "latest", "stable":
+			if pp.Pin != "" {
+				errs = append(errs, fmt.Sprintf("package_policies[%d].pin must be empty when version is %q", i, pp.Version))
+			}
+		case "pinned":
+			if pp.Pin == "" {
+				errs = append(errs, fmt.Sprintf("package_policies[%d].pin is required when version is 'pinned'", i))
+			}
+		default:
+			errs = append(errs, fmt.Sprintf("package_policies[%d].version %q is not valid — must be 'latest', 'stable', 'pinned', or empty", i, pp.Version))
+		}
+	}
+
 	if len(errs) > 0 {
 		return fmt.Errorf("config validation failed:\n  - %s", strings.Join(errs, "\n  - "))
 	}
 	return nil
+}
+
+// DefaultConfig returns a Config populated with sensible defaults.
+// Cache defaults: StableTTL = 24h, LatestTTL = 1h.
+func DefaultConfig() *Config {
+	return &Config{
+		Version: "1.0",
+		Profile: "minimal",
+		Locale:  "en_US.UTF-8",
+		Backends: struct {
+			Default         string   `yaml:"default"`
+			Fallback        string   `yaml:"fallback"`
+			Priority        []string `yaml:"priority"`
+			Version         string   `yaml:"version"`
+			FallbackEnabled bool     `yaml:"fallback_enabled"`
+		}{
+			Default:  "pacman",
+			Priority: []string{"pacman", "nix", "flatpak"},
+		},
+		Cache: CacheConfig{
+			StableTTL: 24 * time.Hour,
+			LatestTTL: 1 * time.Hour,
+		},
+	}
 }

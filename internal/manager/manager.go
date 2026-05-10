@@ -6,6 +6,7 @@ import (
 	"os/exec"
 
 	"github.com/ElioNeto/agnostikos/internal/bootstrap"
+	"github.com/ElioNeto/agnostikos/internal/cache"
 )
 
 // PackageService define o contrato para qualquer gerenciador de pacotes externo
@@ -20,43 +21,89 @@ type PackageService interface {
 
 // AgnosticManager coordena os múltiplos backends
 type AgnosticManager struct {
-	Backends map[string]PackageService
-	Resolver Resolver
+	Backends  map[string]PackageService
+	Resolver  Resolver
+	Cache     *cache.PackageCache
+	noSandbox bool
 }
 
-// NewAgnosticManager inicializa o manager com todos os backends registrados
-func NewAgnosticManager() *AgnosticManager {
+// NewAgnosticManager inicializa o manager com todos os backends registrados.
+// Por padrão, todos os comandos dos backends são executados em namespace Linux
+// isolado (mount, PID, UTS, IPC) para evitar efeitos colaterais no sistema
+// hospedeiro. Use a opção WithNoSandbox para desabilitar o isolamento.
+//
+// Opções funcionais disponíveis:
+//   - WithNoSandbox: desabilita o isolamento de namespace
+//   - WithResolver: injeta um Resolver customizado (útil para testes)
+func NewAgnosticManager(opts ...func(*AgnosticManager)) *AgnosticManager {
+	m := &AgnosticManager{}
+	for _, opt := range opts {
+		opt(m)
+	}
+
+	// Escolhe o executor conforme a flag noSandbox
+	var exe Executor
+	if m.noSandbox {
+		exe = &RealExecutor{}
+	} else {
+		exe = &IsolatedExecutor{}
+	}
+
 	backends := map[string]PackageService{
-		"pacman":  NewPacmanBackend(),
-		"nix":     NewNixBackend(),
-		"flatpak": NewFlatpakBackend(),
+		"pacman":  NewPacmanBackend(exe),
+		"nix":     NewNixBackend(exe),
+		"flatpak": NewFlatpakBackend(exe),
 	}
 
 	// Registra APT backend se apt-get estiver disponível no PATH
 	if _, err := exec.LookPath("apt-get"); err == nil {
-		backends["apt"] = NewAptBackend()
+		backends["apt"] = NewAptBackend(exe)
 	}
 
 	// Registra DNF/YUM backend se dnf ou yum estiver disponível
 	if _, err := exec.LookPath("dnf"); err == nil {
-		backends["dnf"] = NewDNFBackend()
+		backends["dnf"] = NewDNFBackend(exe)
 	} else if _, err := exec.LookPath("yum"); err == nil {
-		backends["yum"] = NewDNFBackend()
+		backends["yum"] = NewDNFBackend(exe)
 	}
 
 	// Registra Zypper backend se zypper estiver disponível
 	if _, err := exec.LookPath("zypper"); err == nil {
-		backends["zypper"] = NewZypperBackend()
+		backends["zypper"] = NewZypperBackend(exe)
 	}
 
 	// Registra Homebrew backend se brew estiver disponível
 	if _, err := exec.LookPath("brew"); err == nil {
-		backends["brew"] = NewBrewBackend()
+		backends["brew"] = NewBrewBackend(exe)
 	}
 
-	return &AgnosticManager{
-		Backends: backends,
-		Resolver: NewResolver(backends),
+	m.Backends = backends
+
+	// Create resolver with cache if available.
+	resolverOpts := []ResolverOption{}
+	if m.Cache != nil {
+		resolverOpts = append(resolverOpts, withCache(m.Cache))
+	}
+	m.Resolver = NewResolver(backends, resolverOpts...)
+	return m
+}
+
+// WithNoSandbox returns a functional option that disables Linux namespace
+// isolation for all backend commands. Use this when the caller needs
+// unrestricted access to the host system (e.g. debugging, non-Linux
+// environments without CAP_SYS_ADMIN).
+func WithNoSandbox() func(*AgnosticManager) {
+	return func(m *AgnosticManager) {
+		m.noSandbox = true
+	}
+}
+
+// WithCache returns a functional option that sets a PackageCache on the
+// manager. The cache is automatically wired into the Resolver so that
+// SearchAll and Resolve benefit from cached results.
+func WithCache(c *cache.PackageCache) func(*AgnosticManager) {
+	return func(m *AgnosticManager) {
+		m.Cache = c
 	}
 }
 

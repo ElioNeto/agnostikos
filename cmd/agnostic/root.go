@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/ElioNeto/agnostikos/internal/cache"
 	"github.com/ElioNeto/agnostikos/internal/config"
+	"github.com/ElioNeto/agnostikos/internal/manager"
 	"github.com/spf13/cobra"
 )
 
@@ -15,6 +19,7 @@ var (
 	Commit     = "dev"
 	configFile string
 	backend    string
+	noSandbox  bool
 )
 
 var rootCmd = &cobra.Command{
@@ -75,6 +80,28 @@ func Execute() {
 	}
 }
 
+// newManager creates a manager.AgnosticManager respecting the --no-sandbox flag
+// and initialises the package metadata cache with default settings.
+//
+// The cache directory is ~/.cache/agnostikos (or the OS temporary directory
+// if the user cache directory cannot be determined). TTL defaults are 24h
+// for stable and 1h for latest policy.
+func newManager() *manager.AgnosticManager {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		cacheDir = os.TempDir()
+	}
+	cacheDir = filepath.Join(cacheDir, "agnostikos")
+
+	pkgCache := cache.New(cacheDir, 24*time.Hour, 1*time.Hour)
+
+	opts := []func(*manager.AgnosticManager){manager.WithCache(pkgCache)}
+	if noSandbox {
+		opts = append(opts, manager.WithNoSandbox())
+	}
+	return manager.NewAgnosticManager(opts...)
+}
+
 // RootCmd returns the root command for use by external tooling (e.g. doc generation).
 func RootCmd() *cobra.Command {
 	return rootCmd
@@ -83,6 +110,7 @@ func RootCmd() *cobra.Command {
 func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	rootCmd.PersistentFlags().StringVarP(&configFile, "config", "c", "", "Path to agnostic.yaml config file")
+	rootCmd.PersistentFlags().BoolVar(&noSandbox, "no-sandbox", false, "Disable Linux namespace isolation for backend commands")
 	rootCmd.AddCommand(validateCmd)
 }
 

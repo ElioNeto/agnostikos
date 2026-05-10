@@ -3,13 +3,13 @@ package agnostic
 import (
 	"fmt"
 
-	"github.com/ElioNeto/agnostikos/internal/manager"
 	"github.com/spf13/cobra"
 )
 
 var (
-	updateAll    bool
-	updateDryRun bool
+	updateAll      bool
+	updateDryRun   bool
+	updateRefresh  bool
 )
 
 var updateCmd = &cobra.Command{
@@ -30,7 +30,12 @@ Otherwise, updates the specified package.`,
 			return nil
 		}
 
-		mgr := manager.NewAgnosticManager()
+		mgr := newManager()
+
+		// If --refresh-cache is set, invalidate the entire cache before updating.
+		if updateRefresh && mgr.Cache != nil {
+			mgr.Cache.Invalidate()
+		}
 		svc, ok := mgr.Backends[backend]
 		if !ok {
 			return fmt.Errorf("backend '%s' not found — available: pacman, nix, flatpak", backend)
@@ -58,6 +63,7 @@ Otherwise, updates the specified package.`,
 func init() {
 	updateCmd.Flags().BoolVarP(&updateAll, "all", "a", false, "Update all packages")
 	updateCmd.Flags().BoolVar(&updateDryRun, "dry-run", false, "Simulate update without executing")
+	updateCmd.Flags().BoolVar(&updateRefresh, "refresh-cache", false, "Invalidate cache before updating")
 	updateCmd.Flags().StringVarP(&backend, "backend", "b", "pacman", "Backend to use (pacman, nix, flatpak)")
 	rootCmd.AddCommand(updateCmd)
 }

@@ -10,9 +10,10 @@ import (
 )
 
 var (
-	searchLimit     int
-	searchJSON      bool
-	searchInstalled bool
+	searchLimit      int
+	searchJSON       bool
+	searchInstalled  bool
+	searchRefresh    bool
 )
 
 var searchCmd = &cobra.Command{
@@ -20,7 +21,12 @@ var searchCmd = &cobra.Command{
 	Short: "Search for packages in the specified backend or all backends",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		mgr := manager.NewAgnosticManager()
+		mgr := newManager()
+
+		// If --refresh-cache is set, invalidate the entire cache before searching.
+		if searchRefresh && mgr.Cache != nil {
+			mgr.Cache.Invalidate()
+		}
 
 		// If no backend specified, search all backends
 		if backend == "" {
@@ -141,5 +147,6 @@ func init() {
 	searchCmd.Flags().BoolVar(&searchJSON, "json", false, "Output in JSON format")
 	searchCmd.Flags().BoolVar(&searchInstalled, "installed", false, "Search only among installed packages")
 	searchCmd.Flags().IntVarP(&searchLimit, "limit", "n", 20, "Maximum number of results")
+	searchCmd.Flags().BoolVar(&searchRefresh, "refresh-cache", false, "Invalidate cache before searching")
 	rootCmd.AddCommand(searchCmd)
 }
