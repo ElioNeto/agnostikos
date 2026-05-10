@@ -34,7 +34,8 @@ func BuildInitramfs(ctx context.Context, rootfsDir, outputPath string) error {
 
 	// Criar /init script — monta sistema de arquivos virtual, configura rede,
 	// verifica se há um RootFS real em /mnt/root para switch_root, e se não
-	// houver, abre um shell interativo com todas as ferramentas do Busybox.
+	// houver, abre um shell interativo no VGA (tty1) com todas as ferramentas
+	// do Busybox.
 	initScript := `#!/bin/sh
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
@@ -72,8 +73,10 @@ fi
 echo "Type 'exit' or press Ctrl+D to power off."
 echo ""
 
-# Run interactive shell. On exit, power off.
-/bin/sh
+# Open interactive shell on tty1 (VM virtual display / VGA).
+# setsid creates a new session; cttyhack makes tty1 the controlling
+# terminal so keyboard input goes to the VM window, not virsh console.
+exec setsid cttyhack /bin/sh < /dev/tty1 > /dev/tty1 2>&1
 poweroff -f
 `
 	initPath := filepath.Join(initDir, "init")
@@ -108,6 +111,8 @@ poweroff -f
 		applets := []string{
 			"sh", "mount", "poweroff", "sleep", "reboot", "halt",
 			"dmesg", "cat", "echo", "udhcpc",
+			// essenciais para shell no VGA
+			"setsid", "cttyhack",
 			// Navegação e arquivos
 			"ls", "cd", "pwd", "cp", "mv", "rm", "mkdir", "rmdir", "touch",
 			"ln", "find", "grep", "sed", "awk", "more", "less", "head", "tail",
@@ -152,7 +157,6 @@ poweroff -f
 		if err := os.MkdirAll(sbinDir, 0755); err != nil {
 			return fmt.Errorf("mkdir sbin: %w", err)
 		}
-		// init, switch_root são essenciais
 		for _, a := range []string{"init", "switch_root"} {
 			srcPath := filepath.Join(busyboxInstall, "sbin", a)
 			if _, err := os.Stat(srcPath); err == nil {
