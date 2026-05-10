@@ -722,30 +722,53 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 		fmt.Println("\n=== Step 5/14: Build glibc (skipped) ===")
 	}
 
-	// Step 6: Kernel
-	kernelImage := kernelImageName(arch, cfg.KernelVersion)
-	kernelArtifact := filepath.Join(cfg.TargetDir, "boot", kernelImage)
+	// Step 6: Kernel — baixa o kernel genérico da distribuição (Ubuntu/Debian)
+	// via apt em vez de compilar manualmente. Isso garante compatibilidade com
+	// a CPU do usuário, já que kernels compilados em outra máquina podem gerar
+	// código incompatível (ex: entry_offset 0x0).
+	//
+	// A versão do kernel é detectada automaticamente a partir do pacote baixado.
+	bootDir := filepath.Join(cfg.TargetDir, "boot")
+	if err := os.MkdirAll(bootDir, 0755); err != nil {
+		return fmt.Errorf("mkdir boot: %w", err)
+	}
+
+	// Cache: verifica se já existe algum vmlinuz-* no diretório de boot
+	existingKernels, _ := filepath.Glob(filepath.Join(bootDir, "vmlinuz-*"))
+	hasKernel := len(existingKernels) > 0
+
 	if !cfg.SkipKernel {
-		if !cfg.Force && artifactExists(kernelArtifact) {
-			emitProgress(cfg, "=== Step 6/14: Build kernel (cached) ===")
-			fmt.Printf("\n=== Step 6/14: Build Kernel (cached: %s) ===\n", kernelArtifact)
+		if !cfg.Force && hasKernel {
+			emitProgress(cfg, "=== Step 6/14: Install kernel (cached) ===")
+			latest := existingKernels[len(existingKernels)-1]
+			fmt.Printf("\n=== Step 6/14: Install Kernel (cached: %s) ===\n", latest)
 		} else {
-			emitProgress(cfg, "=== Step 6/14: Build kernel ===")
-			fmt.Println("\n=== Step 6/14: Build Kernel ===")
-			kernelCfg := KernelConfig{
-				Version:    cfg.KernelVersion,
-				SourcesDir: sourcesDir(cfg.TargetDir),
-				OutputDir:  filepath.Join(cfg.TargetDir, "boot"),
-				Defconfig:  "", // auto-detect from arch
-				Arch:       arch,
+			emitProgress(cfg, "=== Step 6/14: Install generic kernel ===")
+			fmt.Println("\n=== Step 6/14: Install Generic Kernel ===")
+
+			// Remove kernel antigo se Force
+			if cfg.Force {
+				for _, k := range existingKernels {
+					_ = os.Remove(k)
+				}
 			}
-			if err := BuildKernel(kernelCfg); err != nil {
-				return fmt.Errorf("build kernel: %w", err)
+
+			kernelName, err := installGenericKernel(
+				context.Background(),
+				bootDir,
+				sourcesDir(cfg.TargetDir),
+			)
+			if err != nil {
+				return fmt.Errorf("install generic kernel: %w", err)
 			}
+
+			// Atualiza cfg.KernelVersion com a versão real detectada
+			cfg.KernelVersion = strings.TrimPrefix(kernelName, "vmlinuz-")
+			fmt.Printf("\n=== Step 6/14: Generic kernel installed: %s ===\n", kernelName)
 		}
 	} else {
-		emitProgress(cfg, "=== Step 6/14: Build kernel (skipped) ===")
-		fmt.Println("\n=== Step 6/14: Build Kernel (skipped by flag) ===")
+		emitProgress(cfg, "=== Step 6/14: Install kernel (skipped) ===")
+		fmt.Println("\n=== Step 6/14: Install Kernel (skipped by flag) ===")
 	}
 
 	// Step 7: Busybox

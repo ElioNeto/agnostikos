@@ -11,7 +11,7 @@ func resetBootstrapFlags() {
 	bootstrapTarget = ""
 	bootstrapDevice = ""
 	bootstrapEFIPartition = ""
-	bootstrapKernelVer = "6.6"
+	bootstrapKernelVer = "generic"
 	bootstrapBusyboxVer = "1.36.1"
 	bootstrapArch = ""
 	bootstrapUEFI = false

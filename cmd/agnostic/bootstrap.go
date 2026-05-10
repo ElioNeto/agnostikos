@@ -38,7 +38,7 @@ var bootstrapCmd = &cobra.Command{
 	Short:  "Create the AgnosticOS root filesystem, kernel, busybox, initramfs and GRUB (internal)",
 	Long: `Build a complete bootable RootFS with:
   - FHS directory structure
-  - Linux kernel compilation
+  - Linux kernel (auto-downloaded generic distro kernel, compatible with all CPUs)
   - Busybox compilation (statically linked)
   - Initramfs generation
   - GRUB bootloader installation (BIOS or UEFI)
@@ -115,12 +115,12 @@ func init() {
 	bootstrapCmd.Flags().StringVarP(&bootstrapTarget, "target", "t", "", "Target directory for the rootfs (default: $AGNOSTICOS_ROOT or /mnt/data/agnostikOS/rootfs)")
 	bootstrapCmd.Flags().StringVar(&bootstrapDevice, "device", "", "Disk device for BIOS grub-install (e.g. /dev/sda). Required when --uefi is not set.")
 	bootstrapCmd.Flags().StringVar(&bootstrapEFIPartition, "efi-partition", "", "EFI System Partition to mount before grub-install (e.g. /dev/nvme0n1p1). Required for --uefi on real hardware.")
-	bootstrapCmd.Flags().StringVar(&bootstrapKernelVer, "kernel-version", "6.6", "Linux kernel version (e.g. 6.6)")
+	bootstrapCmd.Flags().StringVar(&bootstrapKernelVer, "kernel-version", "generic", "Kernel version: 'generic' (default) = auto-detect from distro package, or specify version like '6.6'")
 	bootstrapCmd.Flags().StringVar(&bootstrapBusyboxVer, "busybox-version", "1.36.1", "Busybox version (e.g. 1.36.1)")
 	bootstrapCmd.Flags().StringVar(&bootstrapArch, "arch", "", "Target architecture (amd64, arm64). Empty = auto-detect from host")
 	bootstrapCmd.Flags().BoolVar(&bootstrapUEFI, "uefi", false, "Enable UEFI boot support")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipToolchain, "skip-toolchain", false, "Skip toolchain compilation (binutils, gcc, glibc)")
-	bootstrapCmd.Flags().BoolVar(&bootstrapSkipKernel, "skip-kernel", false, "Skip kernel compilation")
+	bootstrapCmd.Flags().BoolVar(&bootstrapSkipKernel, "skip-kernel", false, "Skip kernel installation (uses distro generic kernel)")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipBusybox, "skip-busybox", false, "Skip busybox compilation")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipInitramfs, "skip-initramfs", false, "Skip initramfs generation")
 	bootstrapCmd.Flags().BoolVar(&bootstrapSkipGRUB, "skip-grub", false, "Skip GRUB installation")

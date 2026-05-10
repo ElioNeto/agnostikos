@@ -69,7 +69,7 @@ var buildCmd = &cobra.Command{
 The build command executes the full bootstrap pipeline to create a bootable ISO:
   1. Create RootFS with FHS directory structure
   2. Download and build toolchain (binutils, GCC, glibc)
-  3. Compile Linux kernel
+   3. Linux kernel (auto-downloaded generic distro kernel, compatible with all CPUs)
   4. Compile Busybox (statically linked)
   5. Generate initramfs
   6. Install GRUB bootloader (BIOS or UEFI)
@@ -90,7 +90,7 @@ when the toolchain is already cached. See individual flags below.
 Examples:
   agnostic build                                            # defaults
   agnostic build recipes/base.yaml                          # from recipe
-  agnostic build --kernel-version 6.6 --uefi                # custom kernel
+  agnostic build --kernel-version generic --uefi            # auto-detect kernel
   agnostic build --skip-toolchain --skip-kernel             # skip expensive steps
   agnostic build recipes/base.yaml --output custom.iso      # custom output`,
 	Args: cobra.MaximumNArgs(1),
@@ -201,12 +201,12 @@ func init() {
 	// Bootstrap pipeline flags (shared with bootstrap.go variables)
 	buildCmd.Flags().StringVar(&bootstrapDevice, "device", "", "Disk device for BIOS grub-install (e.g. /dev/sda)")
 	buildCmd.Flags().StringVar(&bootstrapEFIPartition, "efi-partition", "", "EFI System Partition for UEFI grub-install")
-	buildCmd.Flags().StringVar(&bootstrapKernelVer, "kernel-version", "6.6", "Linux kernel version (e.g. 6.6)")
+	buildCmd.Flags().StringVar(&bootstrapKernelVer, "kernel-version", "generic", "Kernel version: 'generic' (default) = distro generic kernel, or specify version")
 	buildCmd.Flags().StringVar(&bootstrapBusyboxVer, "busybox-version", "1.36.1", "Busybox version (e.g. 1.36.1)")
 	buildCmd.Flags().StringVar(&bootstrapArch, "arch", "", "Target architecture (amd64, arm64). Empty = auto-detect from host")
 	buildCmd.Flags().BoolVar(&bootstrapUEFI, "uefi", false, "Enable UEFI boot support")
 	buildCmd.Flags().BoolVar(&bootstrapSkipToolchain, "skip-toolchain", false, "Skip toolchain compilation (binutils, gcc, glibc)")
-	buildCmd.Flags().BoolVar(&bootstrapSkipKernel, "skip-kernel", false, "Skip kernel compilation")
+	buildCmd.Flags().BoolVar(&bootstrapSkipKernel, "skip-kernel", false, "Skip kernel installation (uses distro generic kernel)")
 	buildCmd.Flags().BoolVar(&bootstrapSkipBusybox, "skip-busybox", false, "Skip busybox compilation")
 	buildCmd.Flags().BoolVar(&bootstrapSkipInitramfs, "skip-initramfs", false, "Skip initramfs generation")
 	buildCmd.Flags().BoolVar(&bootstrapSkipGRUB, "skip-grub", false, "Skip GRUB installation")

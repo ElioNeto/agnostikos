@@ -151,7 +151,16 @@ func findModuleRoot(dir string) string {
 func buildBinary(ctx context.Context, destPath, moduleRoot string) error {
 	buildCmd := exec.CommandContext(ctx, "go", "build", "-o", destPath, ".")
 	buildCmd.Dir = moduleRoot
-	buildCmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+	// Force CGO_ENABLED=0 by filtering out any existing CGO_ENABLED value
+	// and appending CGO_ENABLED=0 at the end. This ensures the last occurrence
+	// wins on all platforms (Go's os/exec uses the last value for duplicate keys).
+	var env []string
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "CGO_ENABLED=") {
+			env = append(env, e)
+		}
+	}
+	buildCmd.Env = append(env, "CGO_ENABLED=0")
 
 	output, err := buildCmd.CombinedOutput()
 	if err != nil {

@@ -16,7 +16,7 @@ func resetBuildFlags() {
 	// Also reset bootstrap flags that the build command now shares
 	bootstrapDevice = ""
 	bootstrapEFIPartition = ""
-	bootstrapKernelVer = "6.6"
+	bootstrapKernelVer = "generic"
 	bootstrapBusyboxVer = "1.36.1"
 	bootstrapArch = ""
 	bootstrapUEFI = false
@@ -166,8 +166,8 @@ func TestBuildCmd_KernelVersionFlag(t *testing.T) {
 	if f == nil {
 		t.Fatal("expected --kernel-version flag to be defined")
 	}
-	if f.DefValue != "6.6" {
-		t.Errorf("expected default '6.6', got %q", f.DefValue)
+	if f.DefValue != "generic" {
+		t.Errorf("expected default 'generic', got %q", f.DefValue)
 	}
 }
 

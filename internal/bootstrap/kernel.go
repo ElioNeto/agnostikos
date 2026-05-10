@@ -167,3 +167,107 @@ func BuildKernel(cfg KernelConfig) error {
 	fmt.Printf("[kernel] ✅ Kernel ready: %s\n", dst)
 	return nil
 }
+
+// installGenericKernel baixa o kernel genérico da distribuição (Ubuntu/Debian)
+// via apt e instala no diretório de boot. Substitui a compilação manual do kernel
+// que frequentemente produz binários incompatíveis com a CPU do usuário.
+//
+// Funcionamento:
+//  1. Consulta apt-cache para descobrir o nome do pacote do kernel genérico
+//  2. Baixa o .deb com apt download
+//  3. Extrai o vmlinuz do .deb
+//  4. Copia para o diretório de boot com o nome adequado
+func installGenericKernel(ctx context.Context, outputDir, workDir string) (string, error) {
+	// 1. Descobrir nome do pacote kernel via apt-cache depends
+	cmd := exec.CommandContext(ctx, "apt-cache", "depends", "linux-image-generic")
+	aptOutput, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("apt-cache depends linux-image-generic: %w", err)
+	}
+
+	var kernelPkg string
+	for _, line := range strings.Split(string(aptOutput), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "Depends:") {
+			pkg := strings.TrimSpace(strings.TrimPrefix(trimmed, "Depends:"))
+			if strings.HasPrefix(pkg, "linux-image-") && strings.HasSuffix(pkg, "-generic") {
+				kernelPkg = pkg
+				break
+			}
+		}
+	}
+
+	if kernelPkg == "" {
+		return "", fmt.Errorf("generic kernel package not found via apt-cache depends")
+	}
+	fmt.Printf("[kernel] Found generic kernel package: %s\n", kernelPkg)
+
+	// 2. Criar diretório de download e baixar o .deb
+	dlDir := filepath.Join(workDir, "kernel-deb")
+	if err := os.MkdirAll(dlDir, 0755); err != nil {
+		return "", fmt.Errorf("mkdir download dir: %w", err)
+	}
+
+	// apt download precisa escrever no diretório atual
+	cmd = exec.CommandContext(ctx, "apt", "download", kernelPkg)
+	cmd.Dir = dlDir
+	dlOut, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("apt download %s: %w\n%s", kernelPkg, err, string(dlOut))
+	}
+	fmt.Printf("[kernel] Downloaded %s\n", strings.TrimSpace(string(dlOut)))
+
+	// 3. Localizar o .deb baixado
+	matches, err := filepath.Glob(filepath.Join(dlDir, "linux-image-*.deb"))
+	if err != nil || len(matches) == 0 {
+		return "", fmt.Errorf("no .deb found after download (glob: %s)", filepath.Join(dlDir, "linux-image-*.deb"))
+	}
+	debFile := matches[0]
+	fmt.Printf("[kernel] Extracting %s\n", filepath.Base(debFile))
+
+	// 4. Extrair o .deb
+	extractDir := filepath.Join(dlDir, "extracted")
+	if err := os.MkdirAll(extractDir, 0755); err != nil {
+		return "", fmt.Errorf("mkdir extract dir: %w", err)
+	}
+	cmd = exec.CommandContext(ctx, "dpkg-deb", "-x", debFile, extractDir)
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("dpkg-deb -x %s: %w", debFile, err)
+	}
+
+	// 5. Encontrar o vmlinuz extraído
+	var kernelSrc string
+	walkErr := filepath.Walk(extractDir, func(path string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !fi.IsDir() && strings.HasPrefix(fi.Name(), "vmlinuz-") {
+			kernelSrc = path
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return "", fmt.Errorf("walk extract dir: %w", walkErr)
+	}
+	if kernelSrc == "" {
+		return "", fmt.Errorf("vmlinuz not found in extracted package")
+	}
+	fmt.Printf("[kernel] Found kernel image: %s\n", kernelSrc)
+
+	// 6. Copiar para o diretório de boot
+	version := strings.TrimPrefix(filepath.Base(kernelSrc), "vmlinuz-")
+	dstName := "vmlinuz-" + version
+	dstPath := filepath.Join(outputDir, dstName)
+
+	kernelData, err := os.ReadFile(kernelSrc)
+	if err != nil {
+		return "", fmt.Errorf("read kernel: %w", err)
+	}
+	if err := os.WriteFile(dstPath, kernelData, 0644); err != nil {
+		return "", fmt.Errorf("write kernel: %w", err)
+	}
+
+	fmt.Printf("[kernel] ✅ Generic kernel installed: %s (from %s)\n", dstPath, filepath.Base(debFile))
+	return dstName, nil
+}
