@@ -61,8 +61,11 @@ func TestValidate_EmptyVersion(t *testing.T) {
 		Version: "",
 		Locale:  "en_US.UTF-8",
 		Backends: struct {
-			Default  string `yaml:"default"`
-			Fallback string `yaml:"fallback"`
+			Default         string   `yaml:"default"`
+			Fallback        string   `yaml:"fallback"`
+			Priority        []string `yaml:"priority"`
+			Version         string   `yaml:"version"`
+			FallbackEnabled bool     `yaml:"fallback_enabled"`
 		}{Default: "pacman"},
 	}
 	if err := cfg.Validate(); err == nil {
@@ -75,8 +78,11 @@ func TestValidate_EmptyLocale(t *testing.T) {
 		Version: "1.0",
 		Locale:  "",
 		Backends: struct {
-			Default  string `yaml:"default"`
-			Fallback string `yaml:"fallback"`
+			Default         string   `yaml:"default"`
+			Fallback        string   `yaml:"fallback"`
+			Priority        []string `yaml:"priority"`
+			Version         string   `yaml:"version"`
+			FallbackEnabled bool     `yaml:"fallback_enabled"`
 		}{Default: "pacman"},
 	}
 	if err := cfg.Validate(); err == nil {
@@ -89,8 +95,11 @@ func TestValidate_EmptyDefaultBackend(t *testing.T) {
 		Version: "1.0",
 		Locale:  "en_US.UTF-8",
 		Backends: struct {
-			Default  string `yaml:"default"`
-			Fallback string `yaml:"fallback"`
+			Default         string   `yaml:"default"`
+			Fallback        string   `yaml:"fallback"`
+			Priority        []string `yaml:"priority"`
+			Version         string   `yaml:"version"`
+			FallbackEnabled bool     `yaml:"fallback_enabled"`
 		}{Default: ""},
 	}
 	if err := cfg.Validate(); err == nil {
@@ -113,8 +122,11 @@ func TestValidate_ValidConfig(t *testing.T) {
 			Extra: []string{"docker"},
 		},
 		Backends: struct {
-			Default  string `yaml:"default"`
-			Fallback string `yaml:"fallback"`
+			Default         string   `yaml:"default"`
+			Fallback        string   `yaml:"fallback"`
+			Priority        []string `yaml:"priority"`
+			Version         string   `yaml:"version"`
+			FallbackEnabled bool     `yaml:"fallback_enabled"`
 		}{Default: "pacman", Fallback: "nix"},
 		User: struct {
 			Name   string   `yaml:"name"`

@@ -69,6 +69,15 @@ backends:
   # [opcional] Backend alternativo caso o padrão falhe.
   fallback: flatpak
 
+  # [opcional] Lista ordenada de backends para resolução automática.
+  priority: [pacman, nix, flatpak]
+
+  # [opcional] Política de versão: "latest", "stable" ou semver (ex: "1.2.3").
+  version: latest
+
+  # [opcional] Fallback automático para próximo backend na lista de prioridade.
+  fallback_enabled: true
+
 # [opcional] Configuração do usuário padrão.
 user:
   # Nome do usuário a ser criado/configurado.

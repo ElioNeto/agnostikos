@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"os/exec"
 
 	"github.com/ElioNeto/agnostikos/internal/bootstrap"
 )
@@ -20,17 +21,59 @@ type PackageService interface {
 // AgnosticManager coordena os múltiplos backends
 type AgnosticManager struct {
 	Backends map[string]PackageService
+	Resolver Resolver
 }
 
 // NewAgnosticManager inicializa o manager com todos os backends registrados
 func NewAgnosticManager() *AgnosticManager {
-	return &AgnosticManager{
-		Backends: map[string]PackageService{
-			"pacman":  NewPacmanBackend(),
-			"nix":     NewNixBackend(),
-			"flatpak": NewFlatpakBackend(),
-		},
+	backends := map[string]PackageService{
+		"pacman":  NewPacmanBackend(),
+		"nix":     NewNixBackend(),
+		"flatpak": NewFlatpakBackend(),
 	}
+
+	// Registra APT backend se apt-get estiver disponível no PATH
+	if _, err := exec.LookPath("apt-get"); err == nil {
+		backends["apt"] = NewAptBackend()
+	}
+
+	// Registra DNF/YUM backend se dnf ou yum estiver disponível
+	if _, err := exec.LookPath("dnf"); err == nil {
+		backends["dnf"] = NewDNFBackend()
+	} else if _, err := exec.LookPath("yum"); err == nil {
+		backends["yum"] = NewDNFBackend()
+	}
+
+	// Registra Zypper backend se zypper estiver disponível
+	if _, err := exec.LookPath("zypper"); err == nil {
+		backends["zypper"] = NewZypperBackend()
+	}
+
+	// Registra Homebrew backend se brew estiver disponível
+	if _, err := exec.LookPath("brew"); err == nil {
+		backends["brew"] = NewBrewBackend()
+	}
+
+	return &AgnosticManager{
+		Backends: backends,
+		Resolver: NewResolver(backends),
+	}
+}
+
+// WithResolver configura um Resolver customizado (útil para testes).
+func WithResolver(r Resolver) func(*AgnosticManager) {
+	return func(m *AgnosticManager) {
+		m.Resolver = r
+	}
+}
+
+// ResolvePackage resolves which backend should handle a package based on the given policy.
+// It returns a ResolveResult with the selected backend and version info.
+func (m *AgnosticManager) ResolvePackage(ctx context.Context, pkg string, policy ResolvePolicy) (ResolveResult, error) {
+	if m.Resolver == nil {
+		return ResolveResult{}, fmt.Errorf("resolver not initialized")
+	}
+	return m.Resolver.Resolve(ctx, pkg, policy)
 }
 
 // RegisterBackend adiciona um backend customizado em runtime

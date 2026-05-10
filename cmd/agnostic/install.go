@@ -1,6 +1,7 @@
 package agnostic
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -62,14 +63,14 @@ Otherwise, install a single package specified as argument.`,
 			}
 
 			mgr := manager.NewAgnosticManager()
-			svc, ok := mgr.Backends[backend]
-			if !ok {
-				return fmt.Errorf("backend '%s' not found — available: pacman, nix, flatpak", backend)
-			}
-
+			policy := policyFromConfig(nil)
 			for _, pkg := range pp.Packages {
-				fmt.Printf("📦 Installing '%s' via %s...\n", pkg, backend)
-				if err := svc.Install(pkg); err != nil {
+				b, err := resolveBackend(cmd.Context(), mgr, pkg, policy)
+				if err != nil {
+					return err
+				}
+				fmt.Printf("📦 Installing '%s' via %s...\n", pkg, b)
+				if err := mgr.Backends[b].Install(pkg); err != nil {
 					return fmt.Errorf("installation of '%s' failed: %w", pkg, err)
 				}
 				fmt.Printf("✅ '%s' installed successfully\n", pkg)
@@ -125,14 +126,14 @@ Otherwise, install a single package specified as argument.`,
 				return nil
 			}
 
-			svc, ok := mgr.Backends[cfg.Backends.Default]
-			if !ok {
-				return fmt.Errorf("backend '%s' not found — available: pacman, nix, flatpak", cfg.Backends.Default)
-			}
-
+			policy := policyFromConfig(cfg)
 			for _, pkg := range pkgs {
-				fmt.Printf("📦 Installing '%s' via %s...\n", pkg, cfg.Backends.Default)
-				if err := svc.Install(pkg); err != nil {
+				b, err := resolveBackend(cmd.Context(), mgr, pkg, policy)
+				if err != nil {
+					return err
+				}
+				fmt.Printf("📦 Installing '%s' via %s...\n", pkg, b)
+				if err := mgr.Backends[b].Install(pkg); err != nil {
 					return fmt.Errorf("installation of '%s' failed: %w", pkg, err)
 				}
 				fmt.Printf("✅ '%s' installed successfully\n", pkg)
@@ -146,14 +147,27 @@ Otherwise, install a single package specified as argument.`,
 		}
 
 		mgr := manager.NewAgnosticManager()
-		svc, ok := mgr.Backends[backend]
-		if !ok {
-			return fmt.Errorf("backend '%s' not found — available: pacman, nix, flatpak", backend)
+		policy := policyFromConfig(nil)
+
+		// Determine which backend to use
+		b := backend
+		if b == "" {
+			// Auto-resolve using the resolver
+			var err error
+			b, err = resolveBackend(cmd.Context(), mgr, args[0], policy)
+			if err != nil {
+				return err
+			}
 		}
-		fmt.Printf("📦 Installing '%s' via %s...\n", args[0], backend)
+
+		svc, ok := mgr.Backends[b]
+		if !ok {
+			return fmt.Errorf("backend '%s' not found — available: pacman, nix, flatpak", b)
+		}
+		fmt.Printf("📦 Installing '%s' via %s...\n", args[0], b)
 		if isolated {
 			fmt.Println("🔒 Running in isolated namespace...")
-			binArgs, err := backendInstallArgs(backend, args[0])
+			binArgs, err := backendInstallArgs(b, args[0])
 			if err != nil {
 				return err
 			}
@@ -168,10 +182,38 @@ Otherwise, install a single package specified as argument.`,
 }
 
 func init() {
-	installCmd.Flags().StringVarP(&backend, "backend", "b", "pacman", "Backend to use (pacman, nix, flatpak)")
+	installCmd.Flags().StringVarP(&backend, "backend", "b", "", "Backend to use (pacman, nix, flatpak) — empty uses auto-resolution")
 	installCmd.Flags().BoolVarP(&isolated, "isolated", "i", false, "Run in isolated Linux namespace")
 	installCmd.Flags().StringVarP(&profile, "profile", "p", "", "Profile to install (minimal, desktop, server, dev)")
 	rootCmd.AddCommand(installCmd)
+}
+
+// resolveBackend uses the Resolver to find the best backend for a package.
+func resolveBackend(ctx context.Context, mgr *manager.AgnosticManager, pkg string, policy manager.ResolvePolicy) (string, error) {
+	result, err := mgr.ResolvePackage(ctx, pkg, policy)
+	if err != nil {
+		return "", fmt.Errorf("could not resolve backend for %q: %w", pkg, err)
+	}
+	return result.Backend, nil
+}
+
+// policyFromConfig builds a ResolvePolicy from a config file (or uses defaults).
+func policyFromConfig(cfg *config.Config) manager.ResolvePolicy {
+	policy := manager.ResolvePolicy{
+		Priority: []string{"pacman", "nix", "flatpak"},
+		Version:  "latest",
+		Fallback: true,
+	}
+	if cfg != nil {
+		if len(cfg.Backends.Priority) > 0 {
+			policy.Priority = cfg.Backends.Priority
+		}
+		if cfg.Backends.Version != "" {
+			policy.Version = cfg.Backends.Version
+		}
+		policy.Fallback = cfg.Backends.FallbackEnabled
+	}
+	return policy
 }
 
 func backendInstallArgs(backend, pkg string) ([]string, error) {

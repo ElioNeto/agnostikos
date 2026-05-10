@@ -107,6 +107,13 @@ func setupTestServer(t *testing.T) *Server {
 			return []string{"com.spotify.Client"}, nil
 		},
 	}
+	if _, ok := mgr.Backends["apt"]; ok {
+		mgr.Backends["apt"] = &MockPackageService{
+			ListFunc: func() ([]string, error) {
+				return []string{"curl 7.88.1-10"}, nil
+			},
+		}
+	}
 
 	return New(mgr)
 }
@@ -618,8 +625,10 @@ func TestSSEEndpoint_Authenticated(t *testing.T) {
 
 func TestPackageManagerNewHasBackends(t *testing.T) {
 	mgr := manager.NewAgnosticManager()
-	if len(mgr.Backends) != 3 {
-		t.Errorf("expected 3 backends, got %d", len(mgr.Backends))
+	// Core backends: pacman, nix, flatpak; apt é adicionado condicionalmente
+	minExpected := 3
+	if len(mgr.Backends) < minExpected {
+		t.Errorf("expected at least %d backends, got %d", minExpected, len(mgr.Backends))
 	}
 }
 

@@ -45,8 +45,11 @@ type Config struct {
 		Desktop []string `yaml:"desktop"`
 	} `yaml:"packages"`
 	Backends struct {
-		Default  string `yaml:"default"`
-		Fallback string `yaml:"fallback"`
+		Default        string   `yaml:"default"`
+		Fallback       string   `yaml:"fallback"`
+		Priority       []string `yaml:"priority"`
+		Version        string   `yaml:"version"`
+		FallbackEnabled bool    `yaml:"fallback_enabled"`
 	} `yaml:"backends"`
 	User struct {
 		Name   string   `yaml:"name"`
@@ -120,6 +123,26 @@ func (c *Config) Validate() error {
 	// Backends.Fallback (optional, validate if set)
 	if c.Backends.Fallback != "" && !SupportedBackends[c.Backends.Fallback] {
 		errs = append(errs, fmt.Sprintf("backends.fallback %q is not supported — must be one of: pacman, nix, flatpak", c.Backends.Fallback))
+	}
+
+	// Backends.Priority (optional, validate entries if set)
+	for i, name := range c.Backends.Priority {
+		if !SupportedBackends[name] {
+			errs = append(errs, fmt.Sprintf("backends.priority[%d] %q is not supported — must be one of: pacman, nix, flatpak", i, name))
+		}
+	}
+
+	// Backends.Version (optional, validate if set)
+	if c.Backends.Version != "" {
+		switch c.Backends.Version {
+		case "latest", "stable":
+			// valid
+		default:
+			// Assume it's a semver pin, just warn about format
+			if !strings.Contains(c.Backends.Version, ".") {
+				errs = append(errs, fmt.Sprintf("backends.version %q is not valid — must be 'latest', 'stable', or a semver string (e.g. '1.2.3')", c.Backends.Version))
+			}
+		}
 	}
 
 	// Packages — check for empty entries

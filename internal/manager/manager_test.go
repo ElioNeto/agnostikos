@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"testing"
 )
 
@@ -411,6 +412,12 @@ func TestNewAgnosticManager_HasAllBackends(t *testing.T) {
 			t.Errorf("expected backend '%s' to be registered", name)
 		}
 	}
+	// apt é registrado condicionalmente se apt-get estiver no PATH
+	if _, err := exec.LookPath("apt-get"); err == nil {
+		if _, ok := mgr.Backends["apt"]; !ok {
+			t.Error("expected backend 'apt' to be registered when apt-get is available")
+		}
+	}
 }
 
 func TestAgnosticManager_RegisterBackend(t *testing.T) {
@@ -424,8 +431,10 @@ func TestAgnosticManager_RegisterBackend(t *testing.T) {
 func TestAgnosticManager_ListBackends(t *testing.T) {
 	mgr := NewAgnosticManager()
 	list := mgr.ListBackends()
-	if len(list) != 3 {
-		t.Errorf("expected 3 backends, got %d", len(list))
+	// Core backends: pacman, nix, flatpak; apt é adicionado condicionalmente
+	minExpected := 3
+	if len(list) < minExpected {
+		t.Errorf("expected at least %d backends, got %d: %v", minExpected, len(list), list)
 	}
 }
 
