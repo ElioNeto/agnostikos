@@ -25,7 +25,7 @@ func BuildInitramfs(ctx context.Context, rootfsDir, outputPath string) error {
 	defer func() { _ = os.RemoveAll(initDir) }()
 
 	// Criar diretórios essenciais
-	for _, d := range []string{"bin", "dev", "etc", "proc", "sys", "mnt/root"} {
+	for _, d := range []string{"bin", "dev", "etc", "proc", "sys", "mnt/root", "usr/bin", "usr/local/bin"} {
 		path := filepath.Join(initDir, d)
 		if err := os.MkdirAll(path, 0755); err != nil {
 			return fmt.Errorf("mkdir %s: %w", d, err)
@@ -37,7 +37,7 @@ func BuildInitramfs(ctx context.Context, rootfsDir, outputPath string) error {
 	// houver, abre um shell interativo no VGA (tty1) com todas as ferramentas
 	// do Busybox.
 	initScript := `#!/bin/sh
-export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin
 
 # Mount virtual filesystems
 mount -t proc none /proc
@@ -86,13 +86,12 @@ poweroff -f
 
 	// Copiar binários do busybox para dentro do initramfs.
 	// Copiamos apenas o binário principal busybox e criamos links simbólicos
-	// para os applets necessários na inicialização: sh, mount, poweroff, sleep.
+	// para os applets necessários na inicialização.
 	busyboxInstall := filepath.Join(rootfsDir, "busybox-install")
 	busyboxBin := filepath.Join(busyboxInstall, "bin", "busybox")
 	if _, err := os.Stat(busyboxBin); err == nil {
 		fmt.Printf("[initramfs] using busybox binary from %s\n", busyboxBin)
 
-		// Copia o binário busybox para bin/
 		targetBin := filepath.Join(initDir, "bin")
 		if err := os.MkdirAll(targetBin, 0755); err != nil {
 			return fmt.Errorf("mkdir bin: %w", err)
@@ -106,8 +105,6 @@ poweroff -f
 			return fmt.Errorf("write busybox: %w", err)
 		}
 
-		// Cria links simbólicos para os applets do Busybox.
-		// Estes são os comandos disponíveis no shell interativo de resgate.
 		applets := []string{
 			"sh", "mount", "poweroff", "sleep", "reboot", "halt",
 			"dmesg", "cat", "echo", "udhcpc",
@@ -151,8 +148,6 @@ poweroff -f
 			}
 		}
 
-		// Também copia sbin/init e switch_root se existirem
-		// (busybox install cria sbin/init como symlink para ../bin/busybox)
 		sbinDir := filepath.Join(initDir, "sbin")
 		if err := os.MkdirAll(sbinDir, 0755); err != nil {
 			return fmt.Errorf("mkdir sbin: %w", err)
@@ -170,6 +165,30 @@ poweroff -f
 		fmt.Printf("[initramfs] warn: busybox not found at %s — initramfs will have no shell\n", busyboxBin)
 	}
 
+	// Instala o binário agnostic no initramfs.
+	// O binário é copiado de rootfsDir/usr/bin/agnostic (instalado por installAgnosticBinary
+	// durante o build do rootfs). Deve ser um binário estático (CGO_ENABLED=0).
+	agnosticSrc := filepath.Join(rootfsDir, "usr", "bin", "agnostic")
+	if _, err := os.Stat(agnosticSrc); err == nil {
+		data, err := os.ReadFile(agnosticSrc)
+		if err != nil {
+			return fmt.Errorf("read agnostic binary: %w", err)
+		}
+		dest := filepath.Join(initDir, "usr", "bin", "agnostic")
+		if err := os.WriteFile(dest, data, 0755); err != nil {
+			return fmt.Errorf("write agnostic binary: %w", err)
+		}
+		// Symlink /usr/local/bin/agnostic -> /usr/bin/agnostic
+		symlinkPath := filepath.Join(initDir, "usr", "local", "bin", "agnostic")
+		_ = os.Remove(symlinkPath)
+		if err := os.Symlink("/usr/bin/agnostic", symlinkPath); err != nil {
+			return fmt.Errorf("symlink agnostic: %w", err)
+		}
+		fmt.Printf("[initramfs] installed agnostic binary from %s\n", agnosticSrc)
+	} else {
+		fmt.Printf("[initramfs] warn: agnostic binary not found at %s — run 'agnostic build' first\n", agnosticSrc)
+	}
+
 	// Empacotar com cpio | gzip
 	cmd := exec.CommandContext(ctx, "sh", "-c",
 		fmt.Sprintf("cd %s && find . | cpio -H newc -o | gzip > %s",
@@ -179,7 +198,6 @@ poweroff -f
 		return fmt.Errorf("pack initramfs: %w", err)
 	}
 
-	// Verificar se o arquivo foi criado
 	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
 		return fmt.Errorf("initramfs was not created at %s", outputPath)
 	}
