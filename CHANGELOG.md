@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.2.0] - 2026-05-10
+
 ### Added
 - **CLI additions** — new commands for complete package lifecycle management:
   - `agnostic list` — list installed packages across all backends
@@ -17,18 +19,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `agnostic serve` — Web UI server for browser-based package management
   - `agnostic dotfiles` — manage dotfiles via `backup`, `restore`, `sync` subcommands
   - `agnostic validate <config>` — validate `agnostic.yaml` configuration files
-- **Bootstrap/build unification** — `agnostic build` replaces `agnostic bootstrap` as the primary entry point for ISO generation; `bootstrap` kept for backward compatibility
-- **ARM64 CI with QEMU** — cross-architecture CI pipeline using QEMU user-mode emulation for building and testing ARM64 artifacts on amd64 runners
-- **Isolation tests** — automated headless QEMU boot testing in CI with configurable timeout (300s for TCG emulation)
-- **Man pages** — auto-generated man pages via `cobra/doc`; generated with `make docs` and included in release archives under `docs/man/`
+- **Bootstrap/build unification** — `agnostic build` replaces `agnostic bootstrap` as the primary entry point for ISO generation; `bootstrap` kept for backward compatibility (#48)
+- **14-step bootstrap pipeline** — `BootstrapAll` executa pipeline completo com `emitProgress` em cada step, suportando flags `Skip*`, `Force` e `chan<- string` para progresso em tempo real
+- **Parallel toolchain download** — `DownloadToolchain` usa `errgroup` + semáforo com `maxConcurrent` (padrão 3, cap 10); respeita `--jobs`; exibe progresso por arquivo (#57)
+- **SHA256/SHA512 integrity verification** — `downloadFile` verifica checksum após cada download e remove arquivo corrompido em caso de mismatch; SHA512 tem prioridade sobre SHA256 (#55, #61)
+  - `binutils-2.42` — verificado via SHA512 (padrão do upstream)
+  - `gcc-14.3.0` — verificado via SHA256
+  - `glibc-2.39` — verificado via SHA256
+- **HTTPS enforcement** — `enforceHTTPS = true` por padrão; qualquer URL sem prefixo `https://` é rejeitada com erro explícito (#55)
+- **TUI BuildConfigView** — formulário configurável antes do build com campos `TargetDir`, `KernelVersion`, `Arch`, `OutputISO`, `BusyboxVersion`, `Jobs`, toggles `SkipToolchain`/`SkipKernel`; navegação Tab/Shift+Tab/Enter/Esc (#60)
+- **TUI build progress** — barra de progresso `[███████░░░░] 7/14` com step atual em tempo real; `buildDone` exibe caminho da ISO ou erro com contexto (#60)
+- **ARM64 CI with QEMU** — cross-architecture CI pipeline usando QEMU user-mode emulation para build e teste de artefatos ARM64 em runners amd64
+- **Isolation tests** — boot headless automatizado via QEMU em CI com timeout configurável (300s para emulação TCG)
+- **Man pages** — geradas automaticamente via `cobra/doc`; geradas com `make docs` e incluídas nos archives de release em `docs/man/`
 
 ### Changed
-- **Project structure** — new internal packages: `server/`, `tui/`, `dotfiles/` for Web UI, TUI, and dotfile management respectively
-- **Makefile** — added `docs`, `test-minimal-iso-headless`, `test-boot-integration`, `test-boot-integration-uefi`, `package` targets
+- **Project structure** — novos pacotes internos: `server/`, `tui/`, `dotfiles/` para Web UI, TUI e gerenciamento de dotfiles
+- **Makefile** — adicionados targets `docs`, `test-minimal-iso-headless`, `test-boot-integration`, `test-boot-integration-uefi`, `package`
+- **`ToolchainPackage`** — novo campo `SHA512` adicionado ao struct; `downloadFile` atualizado com assinatura `(ctx, dest, url, sha256, sha512)`
+- **gcc toolchain** — versão atualizada de `14.1.0` para `14.3.0`
 
 ### Fixed
-- **manager.Build** — fixed build failures in the package manager abstraction layer (#39)
-- **root.go test import** — fixed testing import bug in root command setup (#41)
+- **manager.Build** — corrigidas falhas de build na camada de abstração do package manager (#39)
+- **root.go test import** — corrigido bug de import de testes no setup do comando root (#41)
 
 ## [v0.1.0] - 2026-05-08
 
@@ -74,4 +87,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Full Changelog**: https://github.com/ElioNeto/agnostikos/commits/v0.1.0
 
+[v0.2.0]: https://github.com/ElioNeto/agnostikos/compare/v0.1.0...v0.2.0
 [v0.1.0]: https://github.com/ElioNeto/agnostikos/releases/tag/v0.1.0
