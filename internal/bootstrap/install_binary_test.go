@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -377,7 +378,7 @@ func TestBuildBinary(t *testing.T) {
 		}
 	}
 
-	err = buildBinary(dest, moduleRoot)
+	err = buildBinary(context.Background(), dest, moduleRoot)
 	if err != nil {
 		t.Fatalf("buildBinary failed: %v", err)
 	}
@@ -394,7 +395,7 @@ func TestBuildBinary(t *testing.T) {
 
 func TestBuildBinary_InvalidModuleRoot(t *testing.T) {
 	tmp := t.TempDir()
-	err := buildBinary(filepath.Join(tmp, "agnostic"), "/nonexistent")
+	err := buildBinary(context.Background(), filepath.Join(tmp, "agnostic"), "/nonexistent")
 	if err == nil {
 		t.Fatal("expected error for invalid module root")
 	}

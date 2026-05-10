@@ -101,8 +101,7 @@ func (b BuildConfigViewModel) toBuildConfig() manager.BuildConfig {
 
 // Update processes key messages for the build config form.
 func (b BuildConfigViewModel) Update(msg tea.Msg) (BuildConfigViewModel, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "tab":
 			b.currentField = (b.currentField + 1) % len(b.fields)

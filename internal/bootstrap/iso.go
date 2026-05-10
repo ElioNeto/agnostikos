@@ -233,6 +233,6 @@ func runGrubMkrescue(isoDir string, cfg ISOConfig) error {
 		return fmt.Errorf("grub-mkrescue failed: %w", err)
 	}
 
-	emitISOProgress(cfg, fmt.Sprintf("ISO generated: %s", cfg.Output))
+	emitISOProgress(cfg, "ISO generated: "+cfg.Output)
 	return nil
 }

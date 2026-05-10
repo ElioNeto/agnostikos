@@ -15,7 +15,7 @@ func equalStringSlices(a, b []string) bool {
 		return false
 	}
 	for i := range a {
-		if a[i] != b[i] {
+		if i < len(a) && i < len(b) && a[i] != b[i] {
 			return false
 		}
 	}
@@ -262,7 +262,7 @@ func TestPackageCache_DiskPersistence(t *testing.T) {
 	c1 := New(dir, 24*time.Hour, 1*time.Hour)
 	c1.Set("pacman", "firefox", []string{"extra/firefox 125.0.1"})
 	c1.Set("nix", "firefox", []string{"legacyPackages.x86_64-linux.firefox (124.0)"})
-	c1.Close()
+	_ = c1.Close()
 
 	// Second cache instance: same directory, should read from disk.
 	c2 := New(dir, 24*time.Hour, 1*time.Hour)
@@ -350,7 +350,7 @@ func TestPackageCache_EmptyMissingDirectory(t *testing.T) {
 	}
 
 	// Clean up.
-	os.RemoveAll(badDir)
+	_ = os.RemoveAll(badDir)
 }
 
 // TestPackageCache_Close verifies that Close returns no error.
@@ -486,7 +486,7 @@ func TestPackageCache_GetAfterSetUpdatesDisk(t *testing.T) {
 
 	c1 := New(dir, 24*time.Hour, 1*time.Hour)
 	c1.Set("pacman", "firefox", []string{"version1"})
-	c1.Close()
+	_ = c1.Close()
 
 	// New instance: should read version1 from disk.
 	c2 := New(dir, 24*time.Hour, 1*time.Hour)
@@ -497,7 +497,7 @@ func TestPackageCache_GetAfterSetUpdatesDisk(t *testing.T) {
 
 	// Overwrite with new data and verify.
 	c2.Set("pacman", "firefox", []string{"version2"})
-	c2.Close()
+	_ = c2.Close()
 
 	c3 := New(dir, 24*time.Hour, 1*time.Hour)
 	got, ok = c3.Get("pacman", "firefox", "stable")

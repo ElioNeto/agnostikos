@@ -66,6 +66,7 @@ type Server struct {
 	// SSE
 	progress    string
 	progressMu  sync.RWMutex
+	buildRunning bool    // separate flag set before goroutine, cleared after
 	sseChannels map[chan SSEEvent]struct{}
 	sseMu       sync.Mutex
 }
@@ -500,11 +501,12 @@ func buildConfigWithDefaults(cfg manager.BuildConfig) manager.BuildConfig {
 
 func (s *Server) handleISOStartBuild(w http.ResponseWriter, r *http.Request) {
 	s.progressMu.Lock()
-	if s.progress != "" {
+	if s.buildRunning {
 		s.progressMu.Unlock()
 		http.Error(w, "ISO build already in progress", http.StatusConflict)
 		return
 	}
+	s.buildRunning = true
 	s.progress = "starting"
 	s.progressMu.Unlock()
 
@@ -522,6 +524,13 @@ func (s *Server) handleISOStartBuild(w http.ResponseWriter, r *http.Request) {
 	cfg = buildConfigWithDefaults(cfg)
 
 	go func() {
+		defer func() {
+			s.progressMu.Lock()
+			s.buildRunning = false
+			s.progress = ""
+			s.progressMu.Unlock()
+		}()
+
 		s.progressMu.Lock()
 		s.progress = "building ISO..."
 		s.progressMu.Unlock()
@@ -530,10 +539,6 @@ func (s *Server) handleISOStartBuild(w http.ResponseWriter, r *http.Request) {
 		s.broadcast(SSEEvent{Event: "iso:progress", Data: "Building ISO image, please wait..."})
 
 		err := s.mgr.Build(context.Background(), cfg, nil)
-
-		s.progressMu.Lock()
-		s.progress = ""
-		s.progressMu.Unlock()
 
 		if err != nil {
 			s.broadcast(SSEEvent{Event: "iso:error", Data: err.Error()})

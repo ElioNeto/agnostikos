@@ -137,7 +137,7 @@ func (c *PackageCache) Get(backend, query, versionPolicy string) ([]string, bool
 
 	if time.Since(diskEntry.FetchedAt) > ttl {
 		// Stale disk entry: remove it.
-		os.Remove(path) // best-effort
+		_ = os.Remove(path) // best-effort
 		return nil, false
 	}
 
@@ -203,7 +203,7 @@ func (c *PackageCache) Invalidate() {
 	if err := os.RemoveAll(c.cacheDir); err != nil {
 		return
 	}
-	os.MkdirAll(c.cacheDir, 0755) // best-effort
+	_ = os.MkdirAll(c.cacheDir, 0755) // best-effort
 }
 
 // InvalidateBackend clears all cached entries for a specific backend from
@@ -226,7 +226,7 @@ func (c *PackageCache) InvalidateBackend(name string) {
 	}
 
 	backendDir := filepath.Join(c.cacheDir, name)
-	os.RemoveAll(backendDir) // best-effort
+	_ = os.RemoveAll(backendDir) // best-effort
 }
 
 // Close finalises the cache. Currently a no-op because all writes are

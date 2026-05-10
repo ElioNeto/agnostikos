@@ -3,6 +3,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -487,12 +488,12 @@ func (m Model) handleBuildConfigViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) readProgressCmd() tea.Cmd {
 	return func() tea.Msg {
 		if m.progressChan == nil {
-			return buildCompletedMsg{err: fmt.Errorf("build cancelled"), iso: ""}
+			return buildCompletedMsg{err: errors.New("build cancelled"), iso: ""}
 		}
 		msg, ok := <-m.progressChan
 		if !ok {
 			// Channel closed unexpectedly (should not happen with sentinel approach)
-			return buildCompletedMsg{err: fmt.Errorf("build cancelled"), iso: ""}
+			return buildCompletedMsg{err: errors.New("build cancelled"), iso: ""}
 		}
 		if msg == "DONE" {
 			isoPath := m.buildCfg.OutputISO
@@ -510,8 +511,7 @@ func (m Model) readProgressCmd() tea.Cmd {
 
 // handleBuildViewKey processes key presses on the build view screen.
 func (m Model) handleBuildViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
+	if msg.String() == "esc" {
 		// Cancel the build context if it's still running
 		if m.cancelBuild != nil {
 			m.cancelBuild()
@@ -671,7 +671,8 @@ func (m Model) buildView() string {
 	b.WriteString(titleStyle.Render("Build AgnosticOS ISO"))
 	b.WriteString("\n\n")
 
-	if !m.buildDone {
+	switch {
+	case !m.buildDone:
 		// Show streaming progress
 		total := m.buildMaxSteps
 		if total <= 0 {
@@ -711,7 +712,7 @@ func (m Model) buildView() string {
 
 		b.WriteString("\n")
 		b.WriteString(helpStyle.Render("Building... esc: cancel • q: quit"))
-	} else if m.buildErr != nil {
+	case m.buildErr != nil:
 		b.WriteString(errorStyle.Render(fmt.Sprintf("Build failed:\n\n  %s\n", m.buildErr)))
 		// Show progress messages even on error for context
 		if len(m.buildProgress) > 0 {
@@ -722,7 +723,7 @@ func (m Model) buildView() string {
 		}
 		b.WriteString("\n")
 		b.WriteString(helpStyle.Render("esc: back • q: quit"))
-	} else {
+	default:
 		b.WriteString(successStyle.Render(fmt.Sprintf("Build completed successfully!\n\nISO generated at:\n  %s\n", m.buildOutputISO)))
 		b.WriteString("\n")
 		b.WriteString(helpStyle.Render("esc: back • q: quit"))

@@ -156,7 +156,7 @@ func TestTokenEnvVar(t *testing.T) {
 	_ = os.Setenv("AGNOSTIKOS_TOKEN", "env-token-456")
 	defer func() { _ = os.Unsetenv("AGNOSTIKOS_TOKEN") }()
 	token := generateToken()
-	if token != "env-token-456" {
+	if token != "env-token-456" { //nolint:gosec
 		t.Errorf("expected env token, got %s", token)
 	}
 }
@@ -180,7 +180,8 @@ func TestAuthMiddleware_MissingAuth(t *testing.T) {
 	defer ts.Close()
 
 	// No auth header at all
-	resp, err := http.Get(ts.URL + "/api/packages")
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", ts.URL+"/api/packages", nil)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}

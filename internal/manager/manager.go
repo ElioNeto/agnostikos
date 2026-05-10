@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 
@@ -118,7 +119,7 @@ func WithResolver(r Resolver) func(*AgnosticManager) {
 // It returns a ResolveResult with the selected backend and version info.
 func (m *AgnosticManager) ResolvePackage(ctx context.Context, pkg string, policy ResolvePolicy) (ResolveResult, error) {
 	if m.Resolver == nil {
-		return ResolveResult{}, fmt.Errorf("resolver not initialized")
+		return ResolveResult{}, errors.New("resolver not initialized")
 	}
 	return m.Resolver.Resolve(ctx, pkg, policy)
 }

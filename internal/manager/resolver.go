@@ -325,9 +325,7 @@ func (r *resolver) Resolve(ctx context.Context, pkg string, policy ResolvePolicy
 	// All backends have responded, none had a suitable match.
 	// Build list of tried backends for error message.
 	tried := make([]string, 0, len(backendsToTry))
-	for _, name := range backendsToTry {
-		tried = append(tried, name)
-	}
+	tried = append(tried, backendsToTry...)
 	return ResolveResult{}, fmt.Errorf("package %q not found in any backend (tried: %s)", pkg, strings.Join(tried, ", "))
 }
 
@@ -362,10 +360,10 @@ func filterByVersion(lines []string, version string) []string {
 			}
 			continue
 		}
-		switch {
-		case version == "latest":
+		switch version {
+		case "latest":
 			filtered = append(filtered, line)
-		case version == "stable":
+		case "stable":
 			if !isPrerelease(v) {
 				filtered = append(filtered, line)
 			}
@@ -488,15 +486,15 @@ func linesToSearchResults(backend string, lines []string) []SearchResult {
 
 // applyVersionPolicy dispatches to the appropriate filter based on the version policy.
 func applyVersionPolicy(results []SearchResult, version string) []SearchResult {
-	switch {
-	case version == "":
+	switch version {
+	case "":
 		if len(results) > 0 {
 			return results[:1]
 		}
 		return nil
-	case version == "latest":
+	case "latest":
 		return latestFilter(results)
-	case version == "stable":
+	case "stable":
 		return stableFilter(results)
 	default:
 		return pinnedFilter(results, version)

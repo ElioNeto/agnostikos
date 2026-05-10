@@ -1486,6 +1486,7 @@ func TestDownloadToolchain_ParallelSuccess(t *testing.T) {
 		callCount.Add(1)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("content-" + r.URL.Path))
+
 	}))
 	defer server.Close()
 

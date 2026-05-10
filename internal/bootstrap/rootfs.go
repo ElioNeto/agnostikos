@@ -219,7 +219,7 @@ func verifySHA256(filePath, expectedHex string) error {
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
@@ -239,7 +239,7 @@ func verifySHA512(filePath, expectedHex string) error {
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	h := sha512.New()
 	if _, err := io.Copy(h, f); err != nil {
@@ -285,13 +285,13 @@ func downloadFile(ctx context.Context, dest, url, expectedSHA256, expectedSHA512
 
 	// Verify SHA512 (takes priority) or SHA256 after successful download
 	if expectedSHA512 != "" {
-		f.Close()
+		_ = f.Close()
 		if err := verifySHA512(dest, expectedSHA512); err != nil {
 			_ = os.Remove(dest)
 			return fmt.Errorf("integrity check: %w", err)
 		}
 	} else if expectedSHA256 != "" && expectedSHA256 != "verify_at_runtime" {
-		f.Close()
+		_ = f.Close()
 		if err := verifySHA256(dest, expectedSHA256); err != nil {
 			_ = os.Remove(dest)
 			return fmt.Errorf("integrity check: %w", err)
@@ -472,7 +472,7 @@ func configureInittab(rootfsDir, autoLoginUser string) error {
 	if autoLoginUser != "" {
 		// Autologin no tty1
 		inittabLines = append(inittabLines,
-			fmt.Sprintf("tty1::respawn:/bin/login -f %s", autoLoginUser),
+			"tty1::respawn:/bin/login -f "+autoLoginUser,
 		)
 	} else {
 		// Prompt de login manual no console serial/primeiro terminal
@@ -510,7 +510,7 @@ hostname agnostikos
 		return fmt.Errorf("write /etc/init.d/rcS: %w", err)
 	}
 	// Tornar executável (já definido no WriteFile com 0755, mas garantimos)
-	if err := os.Chmod(rcSPath, 0755); err != nil {
+	if err := os.Chmod(rcSPath, 0755); err != nil { //nolint:gosec
 		return fmt.Errorf("chmod rcS: %w", err)
 	}
 	fmt.Printf("[inittab] wrote /etc/init.d/rcS\n")

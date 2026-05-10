@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 )
 
@@ -20,36 +19,6 @@ func requireRoot(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip("skipping: test requires root or CAP_SYS_ADMIN for namespace isolation")
 	}
-}
-
-// requireIsolationPossible skips if the platform or permissions do not
-// support Linux namespace creation.
-func requireIsolationPossible(t *testing.T) {
-	t.Helper()
-	if testing.Short() {
-		t.Skip("skipping isolation test in short mode")
-	}
-	// Try a quick unshare to check capabilities
-	cmd := exec.Command("unshare", "-U", "true")
-	if err := cmd.Run(); err != nil {
-		t.Skipf("skipping: unshare not available (%v)", err)
-	}
-}
-
-// requireCapSysAdmin skips if the process does not have CAP_SYS_ADMIN or
-// cannot create the required namespaces. This helper attempts a minimal
-// namespace creation via the syscall package to detect capability level.
-func requireCapSysAdmin(t *testing.T) {
-	t.Helper()
-	// Use unshare(2) via the syscall package — this is the most direct check.
-	// If it fails with EPERM or EOPNOTSUPP, we skip.
-	//
-	// We test CLONE_NEWNS because it is the most commonly restricted flag.
-	// In containers without --privileged, this will fail.
-	if err := syscall.Unshare(syscall.CLONE_NEWNS); err != nil {
-		t.Skipf("skipping: cannot create mount namespace (%v)", err)
-	}
-	// Clean up: unshare affects the current thread, but we don't persist it.
 }
 
 // TestIsolatedExecutor_RunContext_Success verifies that a simple command

@@ -1,6 +1,8 @@
 package bootstrap
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -20,7 +22,7 @@ import (
 // A symlink is created at <rootfsDir>/usr/local/bin/agnostic -> /usr/bin/agnostic.
 func installAgnosticBinary(rootfsDir, arch string) error {
 	if rootfsDir == "" {
-		return fmt.Errorf("rootfsDir must not be empty")
+		return errors.New("rootfsDir must not be empty")
 	}
 	if arch == "" {
 		arch = runtime.GOARCH
@@ -47,7 +49,7 @@ func installAgnosticBinary(rootfsDir, arch string) error {
 			return fmt.Errorf("copy binary from %s: %w", source, err)
 		}
 	case "build":
-		if err := buildBinary(destPath, source); err != nil {
+		if err := buildBinary(context.Background(), destPath, source); err != nil {
 			return fmt.Errorf("build binary: %w", err)
 		}
 	default:
@@ -55,7 +57,7 @@ func installAgnosticBinary(rootfsDir, arch string) error {
 	}
 
 	// Ensure executable
-	if err := os.Chmod(destPath, 0755); err != nil {
+	if err := os.Chmod(destPath, 0755); err != nil { //nolint:gosec
 		return fmt.Errorf("chmod %s: %w", destPath, err)
 	}
 
@@ -102,7 +104,7 @@ func findAgnosticBinary(arch string) (source string, strategy string, err error)
 	}
 
 	// Strategy 2: pre-compiled binary in dist/
-	distName := fmt.Sprintf("dist/agnostic-%s", arch)
+	distName := "dist/agnostic-" + arch
 	if _, statErr := os.Stat(distName); statErr == nil {
 		absPath, absErr := filepath.Abs(distName)
 		if absErr == nil {
@@ -150,8 +152,8 @@ func findModuleRoot(dir string) string {
 
 // buildBinary compiles the agnostic binary from source at moduleRoot.
 // It runs `go build` with CGO_ENABLED=0 for a static binary.
-func buildBinary(destPath, moduleRoot string) error {
-	buildCmd := exec.Command("go", "build", "-o", destPath, ".")
+func buildBinary(ctx context.Context, destPath, moduleRoot string) error {
+	buildCmd := exec.CommandContext(ctx, "go", "build", "-o", destPath, ".")
 	buildCmd.Dir = moduleRoot
 	buildCmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 

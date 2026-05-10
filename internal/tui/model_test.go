@@ -851,7 +851,7 @@ func TestBuildConfigView_EnterRejectsMissingFields(t *testing.T) {
 	m3.buildConfig.fields[1].input.SetValue("6.6")
 	m3.buildConfig.fields[2].input.SetValue("")
 
-	updated, cmd = m3.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, _ = m3.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m4 := updated.(Model)
 
 	if m4.viewState != BuildConfigView {
