@@ -507,6 +507,10 @@ func TestDownloadToolchain_Download(t *testing.T) {
 	httpClient = server.Client()
 	t.Cleanup(func() { httpClient = origHTTP })
 
+	origEnforce := enforceHTTPS
+	enforceHTTPS = false
+	t.Cleanup(func() { enforceHTTPS = origEnforce })
+
 	// Save and replace DefaultToolchain to point to our test server
 	origToolchain := DefaultToolchain
 	DefaultToolchain = []ToolchainPackage{

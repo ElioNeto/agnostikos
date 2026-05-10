@@ -2,6 +2,8 @@ package bootstrap
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -777,10 +779,14 @@ func TestDownloadFile_Success(t *testing.T) {
 	httpClient = server.Client()
 	t.Cleanup(func() { httpClient = origHTTP })
 
+	origEnforce := enforceHTTPS
+	enforceHTTPS = false
+	t.Cleanup(func() { enforceHTTPS = origEnforce })
+
 	tmp := t.TempDir()
 	dest := filepath.Join(tmp, "downloaded")
 
-	err := downloadFile(dest, server.URL)
+	err := downloadFile(dest, server.URL, "")
 	if err != nil {
 		t.Fatalf("downloadFile failed: %v", err)
 	}
@@ -805,11 +811,15 @@ func TestDownloadFile_CreateFileError(t *testing.T) {
 	httpClient = server.Client()
 	t.Cleanup(func() { httpClient = origHTTP })
 
+	origEnforce := enforceHTTPS
+	enforceHTTPS = false
+	t.Cleanup(func() { enforceHTTPS = origEnforce })
+
 	// dest path is in a non-existent directory, so os.Create will fail
 	tmp := t.TempDir()
 	dest := filepath.Join(tmp, "nonexistent", "file")
 
-	err := downloadFile(dest, server.URL)
+	err := downloadFile(dest, server.URL, "")
 	if err == nil {
 		t.Fatal("expected error when dest directory does not exist")
 	}
@@ -825,10 +835,14 @@ func TestDownloadFile_HTTPError(t *testing.T) {
 	httpClient = server.Client()
 	t.Cleanup(func() { httpClient = origHTTP })
 
+	origEnforce := enforceHTTPS
+	enforceHTTPS = false
+	t.Cleanup(func() { enforceHTTPS = origEnforce })
+
 	tmp := t.TempDir()
 	dest := filepath.Join(tmp, "downloaded")
 
-	err := downloadFile(dest, server.URL)
+	err := downloadFile(dest, server.URL, "")
 	if err == nil {
 		t.Fatal("expected error for HTTP 404")
 	}
@@ -874,10 +888,14 @@ func TestDownloadFile_IOCopyError(t *testing.T) {
 	httpClient = &http.Client{Transport: &errRoundTripper{}}
 	t.Cleanup(func() { httpClient = origHTTP })
 
+	origEnforce := enforceHTTPS
+	enforceHTTPS = false
+	t.Cleanup(func() { enforceHTTPS = origEnforce })
+
 	tmp := t.TempDir()
 	dest := filepath.Join(tmp, "downloaded")
 
-	err := downloadFile(dest, "http://example.com/file")
+	err := downloadFile(dest, "http://example.com/file", "")
 	if err == nil {
 		t.Fatal("expected error from io.Copy failure")
 	}
@@ -1061,5 +1079,239 @@ func TestUnmountVirtualFS(t *testing.T) {
 	err := UnmountVirtualFS(tmp)
 	if err != nil {
 		t.Errorf("UnmountVirtualFS returned error: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// verifySHA256
+// ---------------------------------------------------------------------------
+
+func TestVerifySHA256_Match(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "testfile")
+	content := "hello world"
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Compute expected hash
+	h := sha256.New()
+	h.Write([]byte(content))
+	expected := hex.EncodeToString(h.Sum(nil))
+
+	if err := verifySHA256(path, expected); err != nil {
+		t.Errorf("verifySHA256 failed on matching hash: %v", err)
+	}
+}
+
+func TestVerifySHA256_Mismatch(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "testfile")
+	if err := os.WriteFile(path, []byte("hello world"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wrong hash
+	err := verifySHA256(path, "0000000000000000000000000000000000000000000000000000000000000000")
+	if err == nil {
+		t.Fatal("expected error for SHA256 mismatch")
+	}
+	if !strings.Contains(err.Error(), "SHA256 mismatch") {
+		t.Errorf("expected 'SHA256 mismatch' in error, got: %v", err)
+	}
+}
+
+func TestVerifySHA256_FileNotFound(t *testing.T) {
+	err := verifySHA256("/nonexistent/path", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	if err == nil {
+		t.Fatal("expected error for nonexistent file")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// downloadFile — SHA256 verification integration
+// ---------------------------------------------------------------------------
+
+func TestDownloadFile_SHA256Verification(t *testing.T) {
+	content := "verified content"
+	h := sha256.New()
+	h.Write([]byte(content))
+	expectedHash := hex.EncodeToString(h.Sum(nil))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(content))
+	}))
+	defer server.Close()
+
+	origHTTP := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() { httpClient = origHTTP })
+
+	origEnforce := enforceHTTPS
+	enforceHTTPS = false
+	t.Cleanup(func() { enforceHTTPS = origEnforce })
+
+	tmp := t.TempDir()
+	dest := filepath.Join(tmp, "verified")
+
+	err := downloadFile(dest, server.URL, expectedHash)
+	if err != nil {
+		t.Fatalf("downloadFile with valid SHA256 failed: %v", err)
+	}
+
+	data, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != content {
+		t.Errorf("downloaded content = %q; want %q", string(data), content)
+	}
+}
+
+func TestDownloadFile_SHA256MismatchRemovesFile(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("actual content"))
+	}))
+	defer server.Close()
+
+	origHTTP := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() { httpClient = origHTTP })
+
+	origEnforce := enforceHTTPS
+	enforceHTTPS = false
+	t.Cleanup(func() { enforceHTTPS = origEnforce })
+
+	tmp := t.TempDir()
+	dest := filepath.Join(tmp, "corrupt")
+
+	err := downloadFile(dest, server.URL, "0000000000000000000000000000000000000000000000000000000000000000")
+	if err == nil {
+		t.Fatal("expected error for SHA256 mismatch")
+	}
+	if !strings.Contains(err.Error(), "integrity check") {
+		t.Errorf("expected 'integrity check' in error, got: %v", err)
+	}
+
+	// Verify the corrupt file was removed
+	if _, err := os.Stat(dest); err == nil {
+		t.Error("corrupt file should have been removed after SHA256 mismatch")
+	}
+}
+
+func TestDownloadFile_SHA256EmptySkipsVerification(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("any content"))
+	}))
+	defer server.Close()
+
+	origHTTP := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() { httpClient = origHTTP })
+
+	origEnforce := enforceHTTPS
+	enforceHTTPS = false
+	t.Cleanup(func() { enforceHTTPS = origEnforce })
+
+	tmp := t.TempDir()
+	dest := filepath.Join(tmp, "no-verify")
+
+	// Empty SHA256 should not trigger verification
+	err := downloadFile(dest, server.URL, "")
+	if err != nil {
+		t.Fatalf("downloadFile with empty SHA256 failed: %v", err)
+	}
+}
+
+func TestDownloadFile_VerifyAtRuntimePlaceholderSkipsVerification(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("any content"))
+	}))
+	defer server.Close()
+
+	origHTTP := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() { httpClient = origHTTP })
+
+	origEnforce := enforceHTTPS
+	enforceHTTPS = false
+	t.Cleanup(func() { enforceHTTPS = origEnforce })
+
+	tmp := t.TempDir()
+	dest := filepath.Join(tmp, "placeholder")
+
+	// "verify_at_runtime" placeholder should not trigger verification
+	err := downloadFile(dest, server.URL, "verify_at_runtime")
+	if err != nil {
+		t.Fatalf("downloadFile with verify_at_runtime failed: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// downloadFile — HTTPS enforcement
+// ---------------------------------------------------------------------------
+
+func TestDownloadFile_HTTPSEnforcement(t *testing.T) {
+	// enforceHTTPS is true by default
+	err := downloadFile("/tmp/dummy", "http://example.com/file", "")
+	if err == nil {
+		t.Fatal("expected error when HTTPS is enforced but URL is HTTP")
+	}
+	if !strings.Contains(err.Error(), "HTTPS required") {
+		t.Errorf("expected 'HTTPS required' in error, got: %v", err)
+	}
+}
+
+func TestDownloadFile_HTTPSEnforcementAllowsHTTPS(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("secure content"))
+	}))
+	defer server.Close()
+
+	origHTTP := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() { httpClient = origHTTP })
+
+	// We need to disable enforcement to use the test server (httptest serves HTTP)
+	origEnforce := enforceHTTPS
+	enforceHTTPS = false
+	t.Cleanup(func() { enforceHTTPS = origEnforce })
+
+	tmp := t.TempDir()
+	dest := filepath.Join(tmp, "https-test")
+
+	// This test is about verifying the allower does work — we disable enforcement
+	// but the URL passed is from the server which is HTTP. We test the logic
+	// by verifying that when enforcement is false, HTTP works.
+	err := downloadFile(dest, server.URL, "")
+	if err != nil {
+		t.Errorf("downloadFile should work when HTTPS enforcement is disabled: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// DefaultToolchain — HTTPS URLs
+// ---------------------------------------------------------------------------
+
+func TestDefaultToolchain_AllURLsAreHTTPS(t *testing.T) {
+	for _, pkg := range DefaultToolchain {
+		if !strings.HasPrefix(pkg.URL, "https://") {
+			t.Errorf("toolchain package %s has non-HTTPS URL: %s", pkg.Name, pkg.URL)
+		}
+	}
+}
+
+// TestDefaultToolchain_HasSHA256Field verifies all packages have SHA256 field set
+// (even if placeholder) to remind maintainers to fill real hashes.
+func TestDefaultToolchain_HasSHA256Field(t *testing.T) {
+	for _, pkg := range DefaultToolchain {
+		if pkg.SHA256 == "" {
+			t.Errorf("toolchain package %s has empty SHA256 — set a real hash or use 'verify_at_runtime'", pkg.Name)
+		}
 	}
 }

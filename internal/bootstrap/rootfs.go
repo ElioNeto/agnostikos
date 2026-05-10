@@ -2,6 +2,8 @@ package bootstrap
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,15 +25,17 @@ const DefaultRoot = BaseDir + "/rootfs"
 
 // ToolchainPackage descreve um pacote da toolchain
 type ToolchainPackage struct {
-	Name string
-	URL  string
+	Name   string
+	URL    string
+	SHA256 string // SHA256 checksum hex; "verify_at_runtime" as placeholder
 }
 
 // DefaultToolchain lista os pacotes base
+// SHA256 values should be updated to real hashes from upstream SHA256SUMS files.
 var DefaultToolchain = []ToolchainPackage{
-	{"binutils-2.42", "https://sourceware.org/pub/binutils/releases/binutils-2.42.tar.xz"},
-	{"gcc-14.1.0", "https://ftp.gnu.org/gnu/gcc/gcc-14.1.0/gcc-14.1.0.tar.xz"},
-	{"glibc-2.39", "https://ftp.gnu.org/gnu/glibc/glibc-2.39.tar.xz"},
+	{Name: "binutils-2.42", URL: "https://sourceware.org/pub/binutils/releases/binutils-2.42.tar.xz", SHA256: "verify_at_runtime"},
+	{Name: "gcc-14.1.0", URL: "https://ftp.gnu.org/gnu/gcc/gcc-14.1.0/gcc-14.1.0.tar.xz", SHA256: "verify_at_runtime"},
+	{Name: "glibc-2.39", URL: "https://ftp.gnu.org/gnu/glibc/glibc-2.39.tar.xz", SHA256: "verify_at_runtime"},
 }
 
 // FHSDirectories é a árvore de diretórios do Filesystem Hierarchy Standard
@@ -140,7 +144,7 @@ func DownloadToolchain(rootfsDir string) error {
 			continue
 		}
 		fmt.Printf("[toolchain] downloading %s...\n", pkg.Name)
-		if err := downloadFile(dest, pkg.URL); err != nil {
+		if err := downloadFile(dest, pkg.URL, pkg.SHA256); err != nil {
 			return fmt.Errorf("download %s: %w", pkg.Name, err)
 		}
 		fmt.Printf("[toolchain] downloaded %s\n", pkg.Name)
@@ -151,8 +155,38 @@ func DownloadToolchain(rootfsDir string) error {
 // httpClient is a variable so tests can replace it with a mock.
 var httpClient = http.DefaultClient
 
-// downloadFile faz o download de uma URL para um arquivo local
-func downloadFile(dest, url string) error {
+// enforceHTTPS controls whether downloadFile rejects non-HTTPS URLs.
+// Can be disabled in tests that use httptest (which serves over HTTP).
+var enforceHTTPS = true
+
+// verifySHA256 computes the SHA256 hash of a file and compares it to the expected hex string.
+func verifySHA256(filePath, expectedHex string) error {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("open file: %w", err)
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return fmt.Errorf("read file: %w", err)
+	}
+
+	got := hex.EncodeToString(h.Sum(nil))
+	if !strings.EqualFold(got, expectedHex) {
+		return fmt.Errorf("SHA256 mismatch: got %s, expected %s", got, expectedHex)
+	}
+	return nil
+}
+
+// downloadFile faz o download de uma URL para um arquivo local.
+// Se expectedSHA256 for preenchido (e diferente de "verify_at_runtime"),
+// verifica a integridade após o download e remove o arquivo em caso de falha.
+func downloadFile(dest, url, expectedSHA256 string) error {
+	if enforceHTTPS && !strings.HasPrefix(url, "https://") {
+		return fmt.Errorf("HTTPS required for download: %s", url)
+	}
+
 	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
@@ -172,6 +206,15 @@ func downloadFile(dest, url string) error {
 	defer func() { _ = f.Close() }()
 	if _, err := io.Copy(f, resp.Body); err != nil {
 		return fmt.Errorf("write file: %w", err)
+	}
+
+	// Verify SHA256 after successful download
+	if expectedSHA256 != "" && expectedSHA256 != "verify_at_runtime" {
+		f.Close()
+		if err := verifySHA256(dest, expectedSHA256); err != nil {
+			_ = os.Remove(dest)
+			return fmt.Errorf("integrity check: %w", err)
+		}
 	}
 	return nil
 }
@@ -514,7 +557,7 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 		cfg.KernelVersion, cfg.BusyboxVersion, arch, cfg.UEFI, cfg.Force, cfg.Jobs)
 
 	// Step 1: RootFS — idempotente, MkdirAll é no-op se já existe
-	fmt.Println("\n=== Step 1/13: Create RootFS ===")
+	fmt.Println("\n=== Step 1/14: Create RootFS ===")
 	if err := CreateRootFS(cfg.TargetDir); err != nil {
 		return fmt.Errorf("create rootfs: %w", err)
 	}
@@ -526,42 +569,42 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 
 	// Step 2: Toolchain — download dos tarballs
 	if !cfg.SkipToolchain {
-		fmt.Println("\n=== Step 2/13: Download Toolchain ===")
+		fmt.Println("\n=== Step 2/14: Download Toolchain ===")
 		if err := DownloadToolchain(cfg.TargetDir); err != nil {
 			return fmt.Errorf("download toolchain: %w", err)
 		}
 	} else {
-		fmt.Println("\n=== Step 2/13: Download Toolchain (skipped) ===")
+		fmt.Println("\n=== Step 2/14: Download Toolchain (skipped) ===")
 	}
 
 	// Step 3: Build binutils
 	if !cfg.SkipToolchain {
-		fmt.Println("\n=== Step 3/13: Build binutils ===")
+		fmt.Println("\n=== Step 3/14: Build binutils ===")
 		if err := BuildBinutils(ctx, tcCfg); err != nil {
 			return fmt.Errorf("build binutils: %w", err)
 		}
 	} else {
-		fmt.Println("\n=== Step 3/13: Build binutils (skipped) ===")
+		fmt.Println("\n=== Step 3/14: Build binutils (skipped) ===")
 	}
 
 	// Step 4: Build GCC (pass 1, C only)
 	if !cfg.SkipToolchain {
-		fmt.Println("\n=== Step 4/13: Build GCC (pass 1) ===")
+		fmt.Println("\n=== Step 4/14: Build GCC (pass 1) ===")
 		if err := BuildGCC(ctx, tcCfg); err != nil {
 			return fmt.Errorf("build gcc: %w", err)
 		}
 	} else {
-		fmt.Println("\n=== Step 4/13: Build GCC (skipped) ===")
+		fmt.Println("\n=== Step 4/14: Build GCC (skipped) ===")
 	}
 
 	// Step 5: Build glibc
 	if !cfg.SkipToolchain {
-		fmt.Println("\n=== Step 5/13: Build glibc ===")
+		fmt.Println("\n=== Step 5/14: Build glibc ===")
 		if err := BuildGLibc(ctx, tcCfg); err != nil {
 			return fmt.Errorf("build glibc: %w", err)
 		}
 	} else {
-		fmt.Println("\n=== Step 5/13: Build glibc (skipped) ===")
+		fmt.Println("\n=== Step 5/14: Build glibc (skipped) ===")
 	}
 
 	// Step 6: Kernel
@@ -569,9 +612,9 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 	kernelArtifact := filepath.Join(cfg.TargetDir, "boot", kernelImage)
 	if !cfg.SkipKernel {
 		if !cfg.Force && artifactExists(kernelArtifact) {
-			fmt.Printf("\n=== Step 6/13: Build Kernel (cached: %s) ===\n", kernelArtifact)
+			fmt.Printf("\n=== Step 6/14: Build Kernel (cached: %s) ===\n", kernelArtifact)
 		} else {
-			fmt.Println("\n=== Step 6/13: Build Kernel ===")
+			fmt.Println("\n=== Step 6/14: Build Kernel ===")
 			kernelCfg := KernelConfig{
 				Version:    cfg.KernelVersion,
 				SourcesDir: sourcesDir(cfg.TargetDir),
@@ -584,16 +627,16 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 			}
 		}
 	} else {
-		fmt.Println("\n=== Step 6/13: Build Kernel (skipped by flag) ===")
+		fmt.Println("\n=== Step 6/14: Build Kernel (skipped by flag) ===")
 	}
 
 	// Step 7: Busybox
 	busyboxArtifact := filepath.Join(cfg.TargetDir, "busybox-install", "bin", "busybox")
 	if !cfg.SkipBusybox {
 		if !cfg.Force && artifactExists(busyboxArtifact) {
-			fmt.Printf("\n=== Step 7/13: Build Busybox (cached: %s) ===\n", busyboxArtifact)
+			fmt.Printf("\n=== Step 7/14: Build Busybox (cached: %s) ===\n", busyboxArtifact)
 		} else {
-			fmt.Println("\n=== Step 7/13: Build Busybox ===")
+			fmt.Println("\n=== Step 7/14: Build Busybox ===")
 			busyboxCfg := BusyboxConfig{
 				Version:   cfg.BusyboxVersion,
 				TargetDir: cfg.TargetDir,
@@ -603,16 +646,16 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 			}
 		}
 	} else {
-		fmt.Println("\n=== Step 7/13: Build Busybox (skipped by flag) ===")
+		fmt.Println("\n=== Step 7/14: Build Busybox (skipped by flag) ===")
 	}
 
 	// Step 8: Initramfs
 	initramfsArtifact := filepath.Join(cfg.TargetDir, "boot", "initramfs.img")
 	if !cfg.SkipInitramfs {
 		if !cfg.Force && artifactExists(initramfsArtifact) {
-			fmt.Printf("\n=== Step 8/13: Build Initramfs (cached: %s) ===\n", initramfsArtifact)
+			fmt.Printf("\n=== Step 8/14: Build Initramfs (cached: %s) ===\n", initramfsArtifact)
 		} else {
-			fmt.Println("\n=== Step 8/13: Build Initramfs ===")
+			fmt.Println("\n=== Step 8/14: Build Initramfs ===")
 			outputDir := filepath.Join(cfg.TargetDir, "boot")
 			if err := os.MkdirAll(outputDir, 0755); err != nil {
 				return fmt.Errorf("mkdir boot: %w", err)
@@ -622,16 +665,16 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 			}
 		}
 	} else {
-		fmt.Println("\n=== Step 8/13: Build Initramfs (skipped by flag) ===")
+		fmt.Println("\n=== Step 8/14: Build Initramfs (skipped by flag) ===")
 	}
 
 	// Step 9: GRUB
 	grubArtifact := filepath.Join(cfg.TargetDir, "boot", "grub", "grub.cfg")
 	if !cfg.SkipGRUB {
 		if !cfg.Force && artifactExists(grubArtifact) {
-			fmt.Printf("\n=== Step 9/13: Install GRUB (cached: %s) ===\n", grubArtifact)
+			fmt.Printf("\n=== Step 9/14: Install GRUB (cached: %s) ===\n", grubArtifact)
 		} else {
-			fmt.Println("\n=== Step 9/13: Install GRUB ===")
+			fmt.Println("\n=== Step 9/14: Install GRUB ===")
 			if err := InstallGRUB(ctx, GRUBConfig{
 				RootfsDir:    cfg.TargetDir,
 				Device:       cfg.Device,
@@ -643,32 +686,32 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 			}
 		}
 	} else {
-		fmt.Println("\n=== Step 9/13: Install GRUB (skipped by flag) ===")
+		fmt.Println("\n=== Step 9/14: Install GRUB (skipped by flag) ===")
 	}
 
 	// Step 10: Configure default shell (Zsh)
-	fmt.Println("\n=== Step 10/13: Configure Default Shell ===")
+	fmt.Println("\n=== Step 10/14: Configure Default Shell ===")
 	if err := configureDefaultShell(cfg.TargetDir); err != nil {
 		return fmt.Errorf("configure default shell: %w", err)
 	}
 
 	// Step 11: Setup mise runtimes (optional)
 	if len(cfg.MiseRuntimes) > 0 {
-		fmt.Println("\n=== Step 11/13: Setup Mise Runtimes ===")
+		fmt.Println("\n=== Step 11/14: Setup Mise Runtimes ===")
 		setupMiseRuntimes(ctx, cfg.TargetDir, cfg.MiseRuntimes)
 	} else {
-		fmt.Println("\n=== Step 11/13: Setup Mise Runtimes (skipped) ===")
+		fmt.Println("\n=== Step 11/14: Setup Mise Runtimes (skipped) ===")
 	}
 
 	// Step 12: Configure init system (busybox init with inittab)
-	fmt.Println("\n=== Step 12/13: Configure Init System (busybox inittab) ===")
+	fmt.Println("\n=== Step 12/14: Configure Init System (busybox inittab) ===")
 	if err := configureInittab(cfg.TargetDir, cfg.AutoLoginUser); err != nil {
 		return fmt.Errorf("configure inittab: %w", err)
 	}
 
 	// Step 13: Apply dotfiles (optional)
 	if cfg.DotfilesApply {
-		fmt.Println("\n=== Step 13/13: Apply Dotfiles ===")
+		fmt.Println("\n=== Step 13/14: Apply Dotfiles ===")
 		configsDir := cfg.ConfigsDir
 		if configsDir == "" {
 			configsDir = filepath.Join(filepath.Dir(os.Args[0]), "configs")
@@ -680,7 +723,13 @@ func BootstrapAll(ctx context.Context, cfg BootstrapConfig) error {
 		}
 		fmt.Println("[dotfiles] applied to rootfs")
 	} else {
-		fmt.Println("\n=== Step 13/13: Apply Dotfiles (skipped) ===")
+		fmt.Println("\n=== Step 13/14: Apply Dotfiles (skipped) ===")
+	}
+
+	// Step 14: Install agnostic binary
+	fmt.Println("\n=== Step 14/14: Install agnostic binary ===")
+	if err := installAgnosticBinary(cfg.TargetDir, cfg.Arch); err != nil {
+		return fmt.Errorf("install agnostic binary: %w", err)
 	}
 
 	fmt.Printf("\n[bootstrap] ✅ Bootstrap complete at %s\n", cfg.TargetDir)

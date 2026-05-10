@@ -17,6 +17,7 @@ type BusyboxConfig struct {
 	Version   string // ex: "1.36.1"
 	TargetDir string // ex: "/mnt/lfs"
 	NumCPUs   string // ex: "4" (opcional; usa nproc se vazio)
+	SHA256    string // SHA256 checksum hex; "verify_at_runtime" as placeholder
 }
 
 // BuildBusybox baixa, configura, compila e instala o Busybox no diretório alvo
@@ -45,6 +46,15 @@ func BuildBusybox(ctx context.Context, cfg BusyboxConfig) error {
 		dlCmd.Stdout, dlCmd.Stderr = os.Stdout, os.Stderr
 		if err := dlCmd.Run(); err != nil {
 			return fmt.Errorf("download busybox %s: %w", cfg.Version, err)
+		}
+		// Verify SHA256 after download
+		if cfg.SHA256 != "" && cfg.SHA256 != "verify_at_runtime" {
+			fmt.Printf("[busybox] Verifying SHA256...\n")
+			if err := verifySHA256(tarballPath, cfg.SHA256); err != nil {
+				_ = os.Remove(tarballPath)
+				return fmt.Errorf("busybox integrity: %w", err)
+			}
+			fmt.Printf("[busybox] SHA256 OK\n")
 		}
 	}
 
