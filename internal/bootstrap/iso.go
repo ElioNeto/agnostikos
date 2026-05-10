@@ -107,7 +107,11 @@ func GenerateISO(cfg ISOConfig) error {
 		}
 	}
 
-	// Criar grub.cfg básico que será usado pelo grub-mkrescue
+	// Criar grub.cfg para a ISO.
+	// console=tty0     → saída vai para o VGA virtual da VM (virt-manager/SPICE/VNC).
+	// quiet loglevel=3 → suprime mensagens de debug do kernel (kworker/dying etc.).
+	// console=ttyS0 removido intencionalmente: evita replicar output no console serial
+	// do host via virsh console.
 	grubDir := filepath.Join(bootDir, "grub")
 	if err := os.MkdirAll(grubDir, 0755); err != nil {
 		return fmt.Errorf("mkdir grubDir: %w", err)
@@ -116,7 +120,7 @@ func GenerateISO(cfg ISOConfig) error {
 set default=0
 
 menuentry "%s %s" {
-    linux /boot/vmlinuz console=tty0 console=ttyS0,115200
+    linux /boot/vmlinuz console=tty0 quiet loglevel=3
     initrd /boot/initramfs.img
 }
 `, cfg.Name, cfg.Version)
