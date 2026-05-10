@@ -83,23 +83,18 @@ func installAgnosticBinary(rootfsDir, arch string) error {
 var osExecutable = os.Executable
 
 // findAgnosticBinary locates the agnostic binary using the strategy precedence:
-// 1. Running binary (os.Executable())
-// 2. Pre-compiled binary at dist/agnostic-<arch>
-// 3. Go source available (go.mod exists in the module root)
+// 1. Build from source (go.mod available) — always static (CGO_ENABLED=0), ideal for initramfs
+// 2. Pre-compiled binary at dist/agnostic-<arch> — expected to be static release binary
+// 3. Currently running binary (os.Executable()) — may be dynamically linked (last resort)
 //
 // Returns the source path, the strategy name, and any error.
 func findAgnosticBinary(arch string) (source string, strategy string, err error) {
-	// Strategy 1: currently running binary
-	execPath, execErr := osExecutable()
-	if execErr == nil && execPath != "" {
-		// Verify it's actually our binary by checking the name
-		base := filepath.Base(execPath)
-		if base == "agnostic" || base == "agnostic.exe" || base == "agnostic.test" {
-			return execPath, "running", nil
-		}
-		// Also check if it looks like a go-built test binary
-		if strings.HasSuffix(base, ".test") {
-			return execPath, "running", nil
+	// Strategy 1: build from source (always produces static binary)
+	cwd, cwdErr := os.Getwd()
+	if cwdErr == nil {
+		moduleRoot := findModuleRoot(cwd)
+		if moduleRoot != "" {
+			return moduleRoot, "build", nil
 		}
 	}
 
@@ -113,20 +108,21 @@ func findAgnosticBinary(arch string) (source string, strategy string, err error)
 		return distName, "dist", nil
 	}
 
-	// Strategy 3: compile on-the-fly
-	// Check if go.mod exists in the module root (source available)
-	cwd, cwdErr := os.Getwd()
-	if cwdErr != nil {
-		return "", "", fmt.Errorf("getwd: %w", cwdErr)
+	// Strategy 3: currently running binary (last resort — may be dynamically linked)
+	execPath, execErr := osExecutable()
+	if execErr == nil && execPath != "" {
+		// Verify it's actually our binary by checking the name
+		base := filepath.Base(execPath)
+		if base == "agnostic" || base == "agnostic.exe" || base == "agnostic.test" {
+			return execPath, "running", nil
+		}
+		// Also check if it looks like a go-built test binary
+		if strings.HasSuffix(base, ".test") {
+			return execPath, "running", nil
+		}
 	}
 
-	// Walk up to find go.mod
-	moduleRoot := findModuleRoot(cwd)
-	if moduleRoot == "" {
-		return "", "", fmt.Errorf("no source found: running binary not available, no dist binary at %q, and no go.mod found from %s", distName, cwd)
-	}
-
-	return moduleRoot, "build", nil
+	return "", "", fmt.Errorf("no source found: no go.mod, no dist binary at %q, and running binary not available", distName)
 }
 
 // findModuleRoot walks up from dir looking for go.mod.

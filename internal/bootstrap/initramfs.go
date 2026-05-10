@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // BuildInitramfs cria um initramfs com /init script e empacota com cpio | gzip
@@ -185,6 +186,14 @@ poweroff -f
 			return fmt.Errorf("symlink agnostic: %w", err)
 		}
 		fmt.Printf("[initramfs] installed agnostic binary from %s\n", agnosticSrc)
+
+		// Fallback: se o binário for dinamicamente ligado, copia as bibliotecas
+		// compartilhadas necessárias para dentro do initramfs.
+		// Isso cobre o caso em que o binário veio de "make build" (CGO_ENABLED=default)
+		// ou de uma release pré-compilada sem linkagem estática.
+		if err := installAgnosticLibraries(dest, initDir); err != nil {
+			fmt.Printf("[initramfs] warn: could not install shared libraries: %v\n", err)
+		}
 	} else {
 		fmt.Printf("[initramfs] warn: agnostic binary not found at %s — run 'agnostic build' first\n", agnosticSrc)
 	}
@@ -203,5 +212,93 @@ poweroff -f
 	}
 
 	fmt.Printf("[initramfs] Initramfs created: %s\n", outputPath)
+	return nil
+}
+
+// installAgnosticLibraries copia as bibliotecas compartilhadas necessárias
+// pelo binário agnostic para dentro do initramfs.
+// Usa ldd para detectar dependências e copia cada uma para o diretório correto.
+// É um fallback para quando o binário não foi compilado com CGO_ENABLED=0.
+//
+// Parâmetros:
+//   - binaryPath: caminho completo para o binário dentro do initramfs (ex: <initDir>/usr/bin/agnostic)
+//   - initDir: diretório raiz do initramfs (ex: /tmp/initramfs-123456)
+func installAgnosticLibraries(binaryPath, initDir string) error {
+	// Roda ldd para listar as dependências dinâmicas
+	cmd := exec.Command("ldd", binaryPath)
+	output, err := cmd.Output()
+	if err != nil {
+		// ldd falhou — provavelmente o binário é estático
+		return nil
+	}
+
+	linhas := strings.Split(string(output), "\n")
+	copied := 0
+	for _, linha := range linhas {
+		linha = strings.TrimSpace(linha)
+		// Pula linhas vazias, vdso (virtual) e binários estáticos
+		if linha == "" || strings.Contains(linha, "linux-vdso") || strings.Contains(linha, "statically linked") {
+			continue
+		}
+		// Formato típico: libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x...)
+		// Ou: /lib64/ld-linux-x86-64.so.2 (0x...)
+		parts := strings.Split(linha, "=>")
+		var libPath string
+		if len(parts) >= 2 {
+			// Formato com "=>"
+			libPath = strings.TrimSpace(parts[1])
+			// Remove o endereço hexadecimal no final
+			if idx := strings.LastIndex(libPath, "("); idx != -1 {
+				libPath = strings.TrimSpace(libPath[:idx])
+			}
+		} else {
+			// Formato sem "=>" (ex: /lib64/ld-linux-x86-64.so.2)
+			if idx := strings.LastIndex(linha, "("); idx != -1 {
+				libPath = strings.TrimSpace(linha[:idx])
+			} else {
+				libPath = linha
+			}
+		}
+
+		if libPath == "" || !strings.HasPrefix(libPath, "/") {
+			continue
+		}
+
+		// Verifica se o arquivo fonte existe
+		if _, err := os.Stat(libPath); os.IsNotExist(err) {
+			// Tenta com /lib64/ relativo
+			altPath := "/lib64/" + filepath.Base(libPath)
+			if _, err2 := os.Stat(altPath); err2 == nil {
+				libPath = altPath
+			} else {
+				continue
+			}
+		}
+
+		// Cria o diretório alvo no initramfs preservando o caminho absoluto
+		// Ex: libPath=/lib/x86_64-linux-gnu/libc.so.6 -> initDir/lib/x86_64-linux-gnu/libc.so.6
+		destPath := filepath.Join(initDir, libPath)
+		destDir := filepath.Dir(destPath)
+		if err := os.MkdirAll(destDir, 0755); err != nil {
+			fmt.Printf("[initramfs] warn: mkdir %s: %v\n", destDir, err)
+			continue
+		}
+
+		data, err := os.ReadFile(libPath)
+		if err != nil {
+			fmt.Printf("[initramfs] warn: read %s: %v\n", libPath, err)
+			continue
+		}
+		if err := os.WriteFile(destPath, data, 0644); err != nil {
+			fmt.Printf("[initramfs] warn: write %s: %v\n", destPath, err)
+			continue
+		}
+		copied++
+		fmt.Printf("[initramfs] copied shared library: %s\n", libPath)
+	}
+
+	if copied > 0 {
+		fmt.Printf("[initramfs] installed %d shared libraries for agnostic binary\n", copied)
+	}
 	return nil
 }

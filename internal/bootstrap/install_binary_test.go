@@ -342,8 +342,23 @@ func TestFindAgnosticBinary_NoSource(t *testing.T) {
 }
 
 func TestFindAgnosticBinary_RunningStrategy(t *testing.T) {
-	// Without mocking osExecutable, the test binary itself is found
-	// (since it has .test suffix, which matches our "running" check).
+	tmp := t.TempDir()
+	oldCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(oldCwd) }()
+
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+
+	// No go.mod and no dist/ in tmp, so "build" and "dist" are skipped.
+	// Mock osExecutable to return a test binary so "running" matches.
+	origExec := osExecutable
+	osExecutable = func() (string, error) { return "/tmp/agnostic.test", nil }
+	t.Cleanup(func() { osExecutable = origExec })
+
 	source, strategy, err := findAgnosticBinary("amd64")
 	if err != nil {
 		t.Fatalf("findAgnosticBinary failed: %v", err)
