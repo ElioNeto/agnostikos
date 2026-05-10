@@ -169,11 +169,11 @@
         }
       }
 
-      // Add X-Auth-Token to all HTMX requests
+      // Add Authorization Bearer to all HTMX requests
       document.addEventListener('htmx:configRequest', function(evt) {
         var t = getToken();
         if (t) {
-          evt.detail.headers['X-Auth-Token'] = t;
+          evt.detail.headers['Authorization'] = 'Bearer ' + t;
         }
       });
 

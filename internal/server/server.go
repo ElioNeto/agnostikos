@@ -15,6 +15,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,12 +31,37 @@ type SSEEvent struct {
 	Data  interface{} `json:"data"`
 }
 
+// ServerOption configures the Server.
+type ServerOption func(*Server)
+
+// WithToken sets a fixed auth token instead of auto-generating one.
+func WithToken(token string) ServerOption {
+	return func(s *Server) {
+		s.token = token
+		h := sha256.Sum256([]byte(token))
+		s.authVal = hex.EncodeToString(h[:])
+	}
+}
+
+// WithTLS enables HTTPS using the given certificate and key files.
+func WithTLS(certFile, keyFile string) ServerOption {
+	return func(s *Server) {
+		s.tlsCert = certFile
+		s.tlsKey = keyFile
+	}
+}
+
 // Server wraps the AgnostikOS manager with an HTTP interface
 type Server struct {
 	mgr     *manager.AgnosticManager
 	mux     *http.ServeMux
 	tmpl    *template.Template
+	token   string // raw token for display
 	authVal string // hex-encoded SHA-256 of auth token
+
+	// TLS
+	tlsCert string
+	tlsKey  string
 
 	// SSE
 	progress    string
@@ -45,7 +71,7 @@ type Server struct {
 }
 
 // New creates a new Server
-func New(mgr *manager.AgnosticManager) *Server {
+func New(mgr *manager.AgnosticManager, opts ...ServerOption) *Server {
 	s := &Server{
 		mgr:         mgr,
 		mux:         http.NewServeMux(),
@@ -55,8 +81,18 @@ func New(mgr *manager.AgnosticManager) *Server {
 	// Parse templates
 	s.tmpl = template.Must(template.ParseFS(templateFS, "templates/*.html"))
 
-	// Auth token
-	s.authVal = resolveAuthHash()
+	// Apply options first (WithToken may set token)
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	// Auth token — if not set via option, fallback to env var or auto-generate
+	if s.token == "" {
+		s.token = generateToken()
+		h := sha256.Sum256([]byte(s.token))
+		s.authVal = hex.EncodeToString(h[:])
+	}
+	fmt.Printf("AGNOSTIC TOKEN: %s\n", s.token)
 
 	// Routes — Go 1.22+ ServeMux with method+pattern routing
 	s.mux.HandleFunc("GET /", s.handleDashboard)
@@ -74,9 +110,9 @@ func New(mgr *manager.AgnosticManager) *Server {
 	return s
 }
 
-// Listen starts the HTTP server on the given address
+// Listen starts the HTTP or HTTPS server on the given address.
+// TLS is used when both --tls-cert and --tls-key are configured via WithTLS.
 func (s *Server) Listen(addr string) error {
-	log.Printf("Server starting on %s", addr)
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           s.mux,
@@ -85,6 +121,13 @@ func (s *Server) Listen(addr string) error {
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
+
+	if s.tlsCert != "" && s.tlsKey != "" {
+		log.Printf("Server starting on https://%s", addr)
+		return srv.ListenAndServeTLS(s.tlsCert, s.tlsKey)
+	}
+
+	log.Printf("Server starting on http://%s", addr)
 	return srv.ListenAndServe()
 }
 
@@ -93,31 +136,35 @@ func (s *Server) Handler() http.Handler {
 	return s.mux
 }
 
-func resolveAuthHash() string {
-	token := os.Getenv("AGNOSTIKOS_TOKEN")
-	if token == "" {
-		// Auto-generate a random token
-		buf := make([]byte, 16)
-		if _, err := rand.Read(buf); err != nil {
-			log.Fatalf("failed to generate auth token: %v", err)
-		}
-		token = hex.EncodeToString(buf)
-		log.Printf("No AGNOSTIKOS_TOKEN set. Auto-generated token: %s", token)
+// generateToken returns a token from env var or auto-generates 32 random bytes.
+func generateToken() string {
+	if token := os.Getenv("AGNOSTIKOS_TOKEN"); token != "" {
+		return token
 	}
-	h := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(h[:])
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		log.Fatalf("failed to generate auth token: %v", err)
+	}
+	return hex.EncodeToString(buf)
 }
 
-// withAuth wraps a handler to require authentication via X-Auth-Token header
+// withAuth wraps a handler to require authentication via Authorization: Bearer header
 // or token query parameter (the latter is required for SSE via EventSource).
 func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := r.Header.Get("X-Auth-Token")
+		token := ""
+
+		auth := r.Header.Get("Authorization")
+		if strings.HasPrefix(auth, "Bearer ") {
+			token = strings.TrimPrefix(auth, "Bearer ")
+		}
+
 		if token == "" {
 			token = r.URL.Query().Get("token")
 		}
+
 		if token == "" {
-			http.Error(w, "Missing X-Auth-Token header or token query parameter", http.StatusUnauthorized)
+			http.Error(w, "Missing Authorization: Bearer header or token query parameter", http.StatusUnauthorized)
 			return
 		}
 		h := sha256.Sum256([]byte(token))

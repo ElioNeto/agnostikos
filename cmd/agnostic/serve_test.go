@@ -7,8 +7,11 @@ import (
 // resetServeFlags resets package-level variables to their defaults
 // so that tests don't leak state between each other.
 func resetServeFlags() {
-	servePort = "8080"
+	serveListen = "127.0.0.1:8080"
 	serveOpen = false
+	serveToken = ""
+	serveTLSCert = ""
+	serveTLSKey = ""
 }
 
 func TestServeCmd_Use(t *testing.T) {
@@ -21,25 +24,25 @@ func TestServeCmd_Use(t *testing.T) {
 	}
 }
 
-func TestServeCmd_PortFlagDefault(t *testing.T) {
+func TestServeCmd_ListenFlagDefault(t *testing.T) {
 	resetServeFlags()
-	f := serveCmd.Flags().Lookup("port")
+	f := serveCmd.Flags().Lookup("listen")
 	if f == nil {
-		t.Fatal("expected --port flag to be defined")
+		t.Fatal("expected --listen flag to be defined")
 	}
-	if f.DefValue != "8080" {
-		t.Errorf("expected default port '8080', got %q", f.DefValue)
+	if f.DefValue != "127.0.0.1:8080" {
+		t.Errorf("expected default listen '127.0.0.1:8080', got %q", f.DefValue)
 	}
 }
 
-func TestServeCmd_PortFlagShort(t *testing.T) {
+func TestServeCmd_ListenFlagShort(t *testing.T) {
 	resetServeFlags()
-	f := serveCmd.Flags().Lookup("port")
+	f := serveCmd.Flags().Lookup("listen")
 	if f == nil {
-		t.Fatal("expected --port flag to be defined")
+		t.Fatal("expected --listen flag to be defined")
 	}
-	if f.Shorthand != "p" {
-		t.Errorf("expected shorthand 'p', got %q", f.Shorthand)
+	if f.Shorthand != "l" {
+		t.Errorf("expected shorthand 'l', got %q", f.Shorthand)
 	}
 }
 
@@ -65,13 +68,40 @@ func TestServeCmd_OpenFlagShort(t *testing.T) {
 	}
 }
 
-func TestServeCmd_PortFlagType(t *testing.T) {
+func TestServeCmd_TokenFlag(t *testing.T) {
 	resetServeFlags()
-	f := serveCmd.Flags().Lookup("port")
+	f := serveCmd.Flags().Lookup("token")
 	if f == nil {
-		t.Fatal("expected --port flag to be defined")
+		t.Fatal("expected --token flag to be defined")
+	}
+	if f.DefValue != "" {
+		t.Errorf("expected default token '', got %q", f.DefValue)
+	}
+}
+
+func TestServeCmd_TLSCertFlag(t *testing.T) {
+	resetServeFlags()
+	f := serveCmd.Flags().Lookup("tls-cert")
+	if f == nil {
+		t.Fatal("expected --tls-cert flag to be defined")
+	}
+}
+
+func TestServeCmd_TLSKeyFlag(t *testing.T) {
+	resetServeFlags()
+	f := serveCmd.Flags().Lookup("tls-key")
+	if f == nil {
+		t.Fatal("expected --tls-key flag to be defined")
+	}
+}
+
+func TestServeCmd_ListenFlagType(t *testing.T) {
+	resetServeFlags()
+	f := serveCmd.Flags().Lookup("listen")
+	if f == nil {
+		t.Fatal("expected --listen flag to be defined")
 	}
 	if f.Value.Type() != "string" {
-		t.Errorf("expected port flag type 'string', got %q", f.Value.Type())
+		t.Errorf("expected listen flag type 'string', got %q", f.Value.Type())
 	}
 }

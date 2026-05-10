@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -70,10 +72,6 @@ func (m *MockPackageService) List() ([]string, error) {
 func setupTestServer(t *testing.T) *Server {
 	t.Helper()
 
-	// Set a known auth token
-	_ = os.Setenv("AGNOSTIKOS_TOKEN", "test-token-123")
-	t.Cleanup(func() { _ = os.Unsetenv("AGNOSTIKOS_TOKEN") })
-
 	mgr := manager.NewAgnosticManager()
 
 	// Replace backends with mocks
@@ -115,11 +113,11 @@ func setupTestServer(t *testing.T) *Server {
 		}
 	}
 
-	return New(mgr)
+	return New(mgr, WithToken("test-token-123"))
 }
 
 func authHeader() (string, string) {
-	return "X-Auth-Token", "test-token-123"
+	return "Authorization", "Bearer test-token-123"
 }
 
 // doGet is a test helper that performs a GET request with context.
@@ -139,6 +137,129 @@ func doGet(t *testing.T, url string) *http.Response {
 // closeResp is a test helper that closes a response body, ignoring errors.
 func closeResp(resp *http.Response) {
 	_ = resp.Body.Close()
+}
+
+// --- Auth / Token tests ---
+
+func TestTokenGeneration(t *testing.T) {
+	token := generateToken()
+	if len(token) != 64 {
+		t.Errorf("expected token length 64 (32 bytes hex), got %d", len(token))
+	}
+	_, err := hex.DecodeString(token)
+	if err != nil {
+		t.Errorf("token is not valid hex: %v", err)
+	}
+}
+
+func TestTokenEnvVar(t *testing.T) {
+	_ = os.Setenv("AGNOSTIKOS_TOKEN", "env-token-456")
+	defer func() { _ = os.Unsetenv("AGNOSTIKOS_TOKEN") }()
+	token := generateToken()
+	if token != "env-token-456" {
+		t.Errorf("expected env token, got %s", token)
+	}
+}
+
+func TestTokenOverride(t *testing.T) {
+	s := New(manager.NewAgnosticManager(), WithToken("override-token"))
+	if s.token != "override-token" {
+		t.Errorf("expected token 'override-token', got %s", s.token)
+	}
+	// Verify hash is computed from the override token
+	h := sha256.Sum256([]byte("override-token"))
+	expectedHash := hex.EncodeToString(h[:])
+	if s.authVal != expectedHash {
+		t.Errorf("expected authVal %s, got %s", expectedHash, s.authVal)
+	}
+}
+
+func TestAuthMiddleware_MissingAuth(t *testing.T) {
+	s := setupTestServer(t)
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	// No auth header at all
+	resp, err := http.Get(ts.URL + "/api/packages")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer closeResp(resp)
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 for missing auth, got %d", resp.StatusCode)
+	}
+}
+
+func TestAuthMiddleware_InvalidBearerToken(t *testing.T) {
+	s := setupTestServer(t)
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", ts.URL+"/api/packages", nil)
+	req.Header.Set("Authorization", "Bearer wrong-token")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer closeResp(resp)
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 for invalid token, got %d", resp.StatusCode)
+	}
+}
+
+func TestAuthMiddleware_ValidBearerToken(t *testing.T) {
+	s := setupTestServer(t)
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", ts.URL+"/api/packages", nil)
+	req.Header.Set("Authorization", "Bearer test-token-123")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer closeResp(resp)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 for valid token, got %d", resp.StatusCode)
+	}
+}
+
+func TestAuthMiddleware_QueryToken(t *testing.T) {
+	s := setupTestServer(t)
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	// Token as query parameter (used by SSE)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", ts.URL+"/api/packages?token=test-token-123", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer closeResp(resp)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 for token query param, got %d", resp.StatusCode)
+	}
+}
+
+func TestAuthMiddleware_InvalidQueryToken(t *testing.T) {
+	s := setupTestServer(t)
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", ts.URL+"/api/packages?token=wrong-token", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer closeResp(resp)
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 for invalid query token, got %d", resp.StatusCode)
+	}
 }
 
 func TestDashboardRoute(t *testing.T) {
@@ -495,7 +616,7 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	defer ts.Close()
 
 	req, _ := http.NewRequestWithContext(context.Background(), "GET", ts.URL+"/api/packages", nil)
-	req.Header.Set("X-Auth-Token", "wrong-token")
+	req.Header.Set("Authorization", "Bearer wrong-token")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
